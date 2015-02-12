@@ -1,0 +1,30 @@
+Geophone is an amplifier and a frequency analyzer for geometric sensors
+such as the SM-24 geophone element from ION Geophysical Corp.
+
+The amplifier is provided as an Arduino shield and the frequency analyzer is
+implemented in software on the Arduino.  Because of the memory usage an
+Arduino Mega or an Arduino Due is required.  Other Arduino versions with
+at least 4 Kbytes of SRAM will require modifications in the code.
+
+The Arduino code is richly commented and should be easy to understand and/or
+modify.
+
+For the Arduino Mega, use a single-supply operational amplifier capable of
+working at 5V (such as an OP213) and set a jumper on JP3 to 5V mode.  For
+the Arduino Due, use a single-supply operational amplifier working at 3.3V
+(such as a TLC272 or an LT1215) to avoid damaging the Arduino's analog input.
+JP3 should be placed in 3.3 mode.
+
+Every second the Arduino software reports frequency components from 0 to 256
+Hz and their measured amplitudes for amplitudes that exceed a programmed
+threshold over the serial port.  The amplitudes are not calibrated; you will
+have to perform a calibration yourself to translate the amplitudes into
+ground movement in, e.g., meters per second.
+
+The threshold may be changed by transmitting a new value followed by a
+newline character.  The threshold is stored in EEPROM.
+
+The frequency analysis lends itself directly to a 3D (or colored) time/
+frequency plot that displays the intensities of different frequencies versus
+time.  The Scilab script geoplot.sce reads a log file with the output and
+generates such an image; geophone.log is a short sample of the output.
