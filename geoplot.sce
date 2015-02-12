@@ -3,7 +3,7 @@
 
 geophone_log = mopen( "geophone.log", "rt" );
 log_entries = mgetl( geophone_log );
-num_entries = size( log_entry );
+num_entries = size( log_entries );
 mclose( geophone_log );
 
 for x_time = 1:num_entries(1)
