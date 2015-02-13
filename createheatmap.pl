@@ -7,9 +7,21 @@ use strict;
 use Image::Magick;
 #use Data::Dumper qw(Dumper);
 
-#my $desired_colormap = "hot";
+# Set the desired colormap among those listed in %color_maps.
 my $desired_colormap = "spectral";
 
+# The number of pixels in the Y direction.
+my $y_size = 190;
+# Margins for the frequency plot, not including axes.
+my $x_margin_l   = 40;
+my $x_margin_r   = 10;
+my $y_margin_t   = 5;
+my $y_margin_b   = 25;
+# Set tick distances.
+my $x_resolution = 200;
+my $y_resolution = 50; # Hz
+
+my $font = "/usr/share/fonts/truetype/msttcorefonts/arial.ttf";
 
 my %color_maps = (
 	"Accent" => 16,
@@ -147,20 +159,21 @@ for( my $i = 0; $i < $heatmap_length; $i++ )
 	@color_map[ $i ] = $color_name;
 }
 
-# Set plotting parameters.
-my $dot_width  = 4;
-my $x_margin   = 10;
-my $y_margin   = 5;
 # Create an empty canvas.
 my $coordinate_system = Image::Magick->new( );
-my $plot_width = $x_margin * 2
+my $dot_width  = 1;
+if( $#report_timestamps < 200 )
+{
+	$dot_width = 4;
+}
+my $plot_width = $x_margin_l + $x_margin_r
 	+ ( $max_timestamp - $min_timestamp + 1 ) * $dot_width;
-$coordinate_system->Set( size => "$plot_width" . "x600" );
+$coordinate_system->Set( size => "$plot_width" . "x$y_size" );
 $coordinate_system->ReadImage( "canvas:black" );
 # Compute the dot height based on the height of the image.
-my $y_size = $coordinate_system->Get( "height" );
 my $number_of_frequency_components = 256;
-my $dot_height = int( ( $y_size - 2 * $y_margin ) / $number_of_frequency_components );
+#my $dot_height = int( ( $y_size - 2 * $y_margin ) / $number_of_frequency_components );
+my $dot_height = int( ( $y_size - $y_margin_t - $y_margin_b ) / $max_frequency );
 my $x_size = $coordinate_system->Get( "width" );
 
 # Plot the dots, colored according to the color map.
@@ -171,14 +184,14 @@ for( my $report_index = 0; $report_index < $entries; $report_index++ )
 	my @frequencies = split /,/, $report_frequencies[ $report_index ];
 	my @amplitudes  = split /,/, $report_amplitudes[ $report_index ];
 
-	my $x_dot   = $timestamp * $dot_width + $x_margin;
+	my $x_dot   = $timestamp * $dot_width + $x_margin_l;
 	my $number_of_pairs = $#frequencies;
 	for( my $pair = 0; $pair < $number_of_pairs; $pair++ )
 	{
 		my $frequency = $frequencies[ $pair ];
 		my $amplitude = $amplitudes[ $pair ];
 
-		my $y_dot     = $frequency * $dot_height + $y_margin;
+		my $y_dot     = $frequency * $dot_height + $y_margin_b;
 		my $x_width = $x_dot + $dot_width;
 		my $y_width = $y_dot + $dot_height;
 
@@ -187,15 +200,68 @@ for( my $report_index = 0; $report_index < $entries; $report_index++ )
 
 		$y_dot   = $y_size - $y_dot;
 		$y_width = $y_size - $y_width;
-		$coordinate_system->Draw( stroke=>$heat_name, fill=>$heat_name,
-								  primitive=>"rectangle",
-								  points=>"$x_dot,$y_dot $x_width,$y_width" );
+		$coordinate_system->Draw( stroke => $heat_name, fill => $heat_name,
+								  primitive => "rectangle",
+								  points => "$x_dot,$y_dot $x_width,$y_width" );
 	}
 }
 # Blur the image slightly to make it easier on the eyes.
 $coordinate_system->AdaptiveBlur( radius => 3, sigma => 1.2 );
 
-# This would be a good place to plot axes from $min_timestamp to $max_timestamp
-# and $min_frequency to $max_frequency, but for now just save the image.
+# Plot axes.
+my $coord_origin_x = $x_margin_l;
+my $coord_origin_y = $y_margin_b;
+my $coord_end_x    = ( $max_timestamp - $min_timestamp ) * $dot_width
+	+ $x_margin_l;
+my $coord_end_y    = $max_frequency * $dot_height + $y_margin_b;
+$coord_origin_y = $y_size - $coord_origin_y;
+$coord_end_y    = $y_size - $coord_end_y;
+my $line_from_x = $coord_end_x + 2; my $line_from_y = $coord_origin_y + 0;
+my $line_to_x = $coord_origin_x - 1; my $line_to_y = $coord_origin_y + 0;
+$coordinate_system->Draw( stroke => "white", primitive => "line",
+						  points => "$line_from_x,$line_from_y "
+						  . "$line_to_x,$line_to_y" );
+$line_from_x = $coord_origin_x - 1; $line_from_y = $coord_end_y - 2;
+$line_to_x = $coord_origin_x - 1; $line_to_y = $coord_origin_y + 0;
+$coordinate_system->Draw( stroke => "white", primitive => "line",
+						  points => "$line_from_x,$line_from_y "
+						  . "$line_to_x,$line_to_y" );
+# Plot tick marks and values on the axes.
+my $x_value = $min_timestamp;
+
+
+my $y_value = 0;
+for( my $y_tick_pos_b = $coord_origin_y; $y_tick_pos_b >= $coord_end_y;
+	 $y_tick_pos_b -= $y_resolution * $dot_height )
+{
+	$line_from_x = $coord_origin_x - 5; $line_from_y = $y_tick_pos_b;
+	$line_to_x = $coord_origin_x - 1; $line_to_y = $y_tick_pos_b;
+	$coordinate_system->Draw( stroke => "white", primitive => "line",
+							  points => "$line_from_x,$line_from_y "
+							  . "$line_to_x,$line_to_y" );
+	my $y_value_x = 32;
+	my $y_value_y = $y_tick_pos_b + 4;
+	$coordinate_system->Annotate( font => "$font", text => "$y_value",
+								  pointsize => "9", antialias => "true",
+								  align => "right", fill => "white",
+								  x => "$y_value_x", y => "$y_value_y" );
+	$y_value = $y_value + $y_resolution;
+}
+
+# Plot labels.
+my $x_label_x = ( $coord_end_x + $coord_origin_x ) / 2;
+my $x_label_y = $y_size - 5;
+$coordinate_system->Annotate( font => "$font", text => "Time",
+							  pointsize => "13", antialias => "true",
+							  align => "right", fill => "white",
+							  x => "$x_label_x", y => "$x_label_y" );
+my $y_label_x = 12;
+my $y_label_y = ( $coord_origin_y + $coord_end_y ) / 2;
+$coordinate_system->Annotate( font => "$font", text => "Frequency",
+							  pointsize => "13", antialias => "true",
+							  align => "center", fill => "white",
+							  x => "$y_label_x", y => "$y_label_y",
+							  rotate => "-90" );
+
 $coordinate_system->Write( "heatmap.png" );
 
