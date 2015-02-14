@@ -5,6 +5,7 @@
 
 use strict;
 use Image::Magick;
+use Time::Piece;
 use Date::Parse;
 use Data::Dumper qw(Dumper);
 
@@ -118,7 +119,7 @@ foreach my $log_entry( @log )
 	my @amplitudes;
 
 	my $log_entry_begin = substr $log_entry, 0, 2;
-	if( $log_entry_begin != "E:" && $log_entry_begin != "OK" )
+	if( $log_entry_begin ne "E:" && $log_entry_begin ne "OK" )
 	{
 		# If the first log entry contains a timestamp then extract it.
 		# Otherwise, assume there's an entry per second (beginning at
@@ -135,9 +136,7 @@ foreach my $log_entry( @log )
 		{
 			# Convert the text timestamp to UNIX time.
 			$has_real_timestamps = 1;
-			my $unix_time = str2time( $log_timestamp );
-			$unix_time = $unix_time->epoch;
-			print "T: $unix_time\n";
+			$log_timestamp = str2time( $log_timestamp );
 		}
 		$report_timestamps[ $report_index ] = $log_timestamp;
 		if( $log_timestamp < $min_timestamp )
@@ -209,7 +208,6 @@ my $x_size = $coordinate_system->Get( "width" );
 my $coord_width_x = $x_size - $x_margin_r - $x_margin_l;
 my $first_x_aligned_timestamp = int( $min_timestamp / $x_resolution ) * $x_resolution;
 my $last_x_aligned_timestamp  = int( ( $max_timestamp + $x_resolution ) / $x_resolution ) * $x_resolution;
-
 
 # Translate and scale according to the physical width of the coordinate
 # system.
@@ -309,8 +307,7 @@ for( my $x_tick_pos = $first_x_aligned_timestamp;
 		$coordinate_system->Annotate( font => "$font", text => "$x_date",
 									  pointsize => "9", antialias => "true",
 									  align => "center", fill => "white",
-									  x => "$x_value_x", y => "$x_value_y",
-									  rotate => "-90" );
+									  x => "$x_value_x", y => "$x_value_y" );
 	}
 	$x_value = $x_value + $x_resolution;
 
