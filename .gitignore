@@ -2,3 +2,4 @@
 *.o
 *.b#?
 *.s#?
+heatmap.png

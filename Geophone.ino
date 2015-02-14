@@ -101,19 +101,13 @@ void start_sampling( )
 #if defined( ARDUINO_AVR_MEGA2560 )
   // Set timer1 interrupt to sample at 512 Hz. */
   const unsigned short prescaling     = 1;
-  const unsigned short match_register = 16000000ul / ( prescaling * SAMPLE_RATE ) - 1;
-
+  const unsigned short match_register = F_CPU / ( prescaling * SAMPLE_RATE ) - 1;
   cli( );
-  TCCR1A = 0;
-  TCCR1B = 0;
-  TCNT1  = 0;
+  TCCR1B = ( TCCR1B & ~_BV(WGM13) ) | _BV(WGM12);
+  TCCR1A = TCCR1A & ~( _BV(WGM11) | _BV(WGM10) );
+  TCCR1B = ( TCCR1B & ~( _BV(CS12) | _BV(CS11) ) ) | _BV(CS10);
   OCR1A = match_register;
-  /* turn on CTC mode. */
-  TCCR1B |= (1 << WGM12);
-  /* Clear CS10, CS11, and CS12 bits for prescaling = 1. */
-  TCCR1B &= 0xffff - ( 1 << CS12 ) | ( 1 << CS11 ) | ( 1 << CS10 );
-  /* Enable timer compare interrupt. */
-  TIMSK1 |= ( 1 << OCIE1A );
+  TIMSK1 |= _BV(OCIE1A);
   sei( );
 
   /* Setup interrupts the Arduino Due. */
@@ -707,8 +701,13 @@ void loop()
   {
     geodata_buffer_full = false;
 
+    /* Set the imaginary data values to 0 as this is a real-valued signal. */
+    unsigned long *geodata_samples_imag_l = (unsigned long *)&geodata_samples_imag[ 0 ];
+    for( int i = 0; i < NUMBER_OF_GEODATA_SAMPLES / 2; i++ )
+    {
+      geodata_samples_imag_l[ i ] = 0ul;
+    }
     /* Compute the Fourier transform in-place. */
-	bzero( geodata_samples_imag, 2 * NUMBER_OF_GEODATA_SAMPLES );
     fft_radix2_512( geodata_samples_real, &geodata_samples_imag[ 0 ] );
     bit_reverse_complex( geodata_samples_real, &geodata_samples_imag[ 0 ],
                          NUMBER_OF_GEODATA_SAMPLES );
