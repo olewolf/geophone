@@ -1,25 +1,35 @@
 #!/usr/bin/perl
 #
 # Create a heatmap based on the frequencies and amplitudes versus
-# time read from a log file.
+# time read from a log file specified as argument.
 
 use strict;
 use Image::Magick;
-#use Data::Dumper qw(Dumper);
+use Date::Parse;
+use Data::Dumper qw(Dumper);
+
+my $logfile = shift;
+if( $logfile eq "" )
+{
+	print "USAGE:  createheatmap.pl <logfile>\n";
+	exit;
+}
 
 # Set the desired colormap among those listed in %color_maps.
 my $desired_colormap = "spectral";
 
-# The number of pixels in the Y direction.
-my $y_size = 190;
+# The total number of pixels in the Y direction.
+my $y_size       = 220;
 # Margins for the frequency plot, not including axes.
 my $x_margin_l   = 40;
-my $x_margin_r   = 10;
+my $x_margin_r   = 40;
 my $y_margin_t   = 5;
-my $y_margin_b   = 25;
+my $y_margin_b   = 36;
 # Set tick distances.
-my $x_resolution = 200;
+my $x_resolution = 60; # Seconds
 my $y_resolution = 50; # Hz
+# Date format for x axis.
+my $datestring = "%H:%M:%S";
 
 my $font = "/usr/share/fonts/truetype/msttcorefonts/arial.ttf";
 
@@ -85,7 +95,7 @@ my %color_maps = (
 	);
 
 # Read the log file.
-open( LOG, "geophone.log" ) || die;
+open( LOG, $logfile ) || die;
 my @log = <LOG>;
 close( LOG );
 
@@ -96,31 +106,50 @@ my @report_timestamps;
 my @report_frequencies;
 my @report_amplitudes;
 my $report_index = 0;
-my $timestamp = 0;
-my $min_timestamp = 0;
+my $timestamp = 22;
+my $min_timestamp = 1.0e12;
 my $max_timestamp = 0;
 my $min_frequency = 0;
 my $max_frequency = 0;
+my $has_real_timestamps = 0;
 foreach my $log_entry( @log )
 {
 	my @frequencies;
 	my @amplitudes;
 
-	my $log_entry_begin = substr $log_entry, 0, 1;
-	if( $log_entry_begin != 'E' && $log_entry_begin != "O" )
+	my $log_entry_begin = substr $log_entry, 0, 2;
+	if( $log_entry_begin != "E:" && $log_entry_begin != "OK" )
 	{
-		# If the log entry contains frequency/amplitude pairs, put a timestamp
-		# into the report.
-		$report_timestamps[ $report_index ] = $timestamp;
-		if( $timestamp < $min_timestamp )
+		# If the first log entry contains a timestamp then extract it.
+		# Otherwise, assume there's an entry per second (beginning at
+		# time = 0).
+		my $test = $log_entry;
+		$test =~ /([a-zA-Z]{3} [a-zA-Z]{3} [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [a-zA-Z]{3} [0-9]{4}) (.*)/;
+		my( $log_timestamp, $measurements ) = ( $1, $2 );
+		if( $log_timestamp eq "" )
 		{
-			$min_timestamp = $timestamp;
+			$log_timestamp = $timestamp;
+			$measurements  = $log_entry;
 		}
-		if( $timestamp > $max_timestamp )
+		else
 		{
-			$max_timestamp = $timestamp;
+			# Convert the text timestamp to UNIX time.
+			$has_real_timestamps = 1;
+			my $unix_time = str2time( $log_timestamp );
+			$unix_time = $unix_time->epoch;
+			print "T: $unix_time\n";
+		}
+		$report_timestamps[ $report_index ] = $log_timestamp;
+		if( $log_timestamp < $min_timestamp )
+		{
+			$min_timestamp = $log_timestamp;
+		}
+		if( $log_timestamp > $max_timestamp )
+		{
+			$max_timestamp = $log_timestamp;
 		}
 		$timestamp = $timestamp + 1;
+
 		# Read the frequencies and the amplitudes.
 		my @values = split /,/, $log_entry;
 		my $pairs_reported = ( $#values + 1 ) / 2;
@@ -176,6 +205,24 @@ my $number_of_frequency_components = 256;
 my $dot_height = int( ( $y_size - $y_margin_t - $y_margin_b ) / $max_frequency );
 my $x_size = $coordinate_system->Get( "width" );
 
+# Find the x translation and scaling.
+my $coord_width_x = $x_size - $x_margin_r - $x_margin_l;
+my $first_x_aligned_timestamp = int( $min_timestamp / $x_resolution ) * $x_resolution;
+my $last_x_aligned_timestamp  = int( ( $max_timestamp + $x_resolution ) / $x_resolution ) * $x_resolution;
+
+
+# Translate and scale according to the physical width of the coordinate
+# system.
+sub translate_x
+{
+	my $new_x = shift;
+
+	$new_x = $new_x - $first_x_aligned_timestamp;
+	$new_x = $new_x * $coord_width_x / ( $last_x_aligned_timestamp - $first_x_aligned_timestamp ) + $x_margin_l;
+	return $new_x;
+}
+
+
 # Plot the dots, colored according to the color map.
 my $entries = $#report_timestamps;
 for( my $report_index = 0; $report_index < $entries; $report_index++ )
@@ -184,7 +231,9 @@ for( my $report_index = 0; $report_index < $entries; $report_index++ )
 	my @frequencies = split /,/, $report_frequencies[ $report_index ];
 	my @amplitudes  = split /,/, $report_amplitudes[ $report_index ];
 
-	my $x_dot   = $timestamp * $dot_width + $x_margin_l;
+	# Translate the x position according to the lowest timestamp.
+	my $x_dot = translate_x( $timestamp );
+
 	my $number_of_pairs = $#frequencies;
 	for( my $pair = 0; $pair < $number_of_pairs; $pair++ )
 	{
@@ -194,12 +243,11 @@ for( my $report_index = 0; $report_index < $entries; $report_index++ )
 		my $y_dot     = $frequency * $dot_height + $y_margin_b;
 		my $x_width = $x_dot + $dot_width;
 		my $y_width = $y_dot + $dot_height;
-
+		$y_dot   = $y_size - $y_dot;
+		$y_width = $y_size - $y_width;
 		my $heat_index = int( $amplitude * $heatmap_length );
 		my $heat_name  = $color_map[ $heat_index ];
 
-		$y_dot   = $y_size - $y_dot;
-		$y_width = $y_size - $y_width;
 		$coordinate_system->Draw( stroke => $heat_name, fill => $heat_name,
 								  primitive => "rectangle",
 								  points => "$x_dot,$y_dot $x_width,$y_width" );
@@ -211,34 +259,76 @@ $coordinate_system->AdaptiveBlur( radius => 3, sigma => 1.2 );
 # Plot axes.
 my $coord_origin_x = $x_margin_l;
 my $coord_origin_y = $y_margin_b;
-my $coord_end_x    = ( $max_timestamp - $min_timestamp ) * $dot_width
-	+ $x_margin_l;
+my $coord_end_x    = translate_x( $last_x_aligned_timestamp );
 my $coord_end_y    = $max_frequency * $dot_height + $y_margin_b;
 $coord_origin_y = $y_size - $coord_origin_y;
 $coord_end_y    = $y_size - $coord_end_y;
-my $line_from_x = $coord_end_x + 2; my $line_from_y = $coord_origin_y + 0;
+my $line_from_x = $coord_end_x + 4; my $line_from_y = $coord_origin_y + 0;
 my $line_to_x = $coord_origin_x - 1; my $line_to_y = $coord_origin_y + 0;
 $coordinate_system->Draw( stroke => "white", primitive => "line",
 						  points => "$line_from_x,$line_from_y "
 						  . "$line_to_x,$line_to_y" );
-$line_from_x = $coord_origin_x - 1; $line_from_y = $coord_end_y - 2;
+$line_from_x = $coord_origin_x - 1; $line_from_y = $coord_end_y - 3;
 $line_to_x = $coord_origin_x - 1; $line_to_y = $coord_origin_y + 0;
 $coordinate_system->Draw( stroke => "white", primitive => "line",
 						  points => "$line_from_x,$line_from_y "
 						  . "$line_to_x,$line_to_y" );
+
 # Plot tick marks and values on the axes.
-my $x_value = $min_timestamp;
+my $x_value = $first_x_aligned_timestamp;
+for( my $x_tick_pos = $first_x_aligned_timestamp;
+	 $x_tick_pos <= $max_timestamp + $x_resolution;
+	 $x_tick_pos += $x_resolution )
+{
+	# Translate the tick position by the lowest time stamp.
+	my $x_tick_pos_l = translate_x( $x_tick_pos );
 
+	# Plot the tick.
+	if( $x_value != $first_x_aligned_timestamp )
+	{
+		$line_from_x = $x_tick_pos_l; $line_from_y = $coord_origin_y + 1;
+		$line_to_x = $x_tick_pos_l; $line_to_y = $coord_origin_y + 5;
+		$coordinate_system->Draw( stroke => "white", primitive => "line",
+								  points => "$line_from_x,$line_from_y "
+								  . "$line_to_x,$line_to_y" );
+	}
+	# Write the tick value.
+	my $x_value_x = $x_tick_pos_l;
+	my $x_value_y = $coord_origin_y + 18;
+	if( $has_real_timestamps == 0 )
+	{
+		$coordinate_system->Annotate( font => "$font", text => "$x_value",
+									  pointsize => "9", antialias => "true",
+									  align => "center", fill => "white",
+									  x => "$x_value_x", y => "$x_value_y" );
+	}
+	# Write the time stamps as date strings.
+	else
+	{
+		my $x_date = localtime( $x_value)->strftime( "$datestring" );
+		$coordinate_system->Annotate( font => "$font", text => "$x_date",
+									  pointsize => "9", antialias => "true",
+									  align => "center", fill => "white",
+									  x => "$x_value_x", y => "$x_value_y",
+									  rotate => "-90" );
+	}
+	$x_value = $x_value + $x_resolution;
 
+}
 my $y_value = 0;
 for( my $y_tick_pos_b = $coord_origin_y; $y_tick_pos_b >= $coord_end_y;
 	 $y_tick_pos_b -= $y_resolution * $dot_height )
 {
-	$line_from_x = $coord_origin_x - 5; $line_from_y = $y_tick_pos_b;
-	$line_to_x = $coord_origin_x - 1; $line_to_y = $y_tick_pos_b;
-	$coordinate_system->Draw( stroke => "white", primitive => "line",
-							  points => "$line_from_x,$line_from_y "
-							  . "$line_to_x,$line_to_y" );
+	# Plot the tick.
+	if( $y_value != 0 )
+	{
+		$line_from_x = $coord_origin_x - 5; $line_from_y = $y_tick_pos_b;
+		$line_to_x = $coord_origin_x - 1; $line_to_y = $y_tick_pos_b;
+		$coordinate_system->Draw( stroke => "white", primitive => "line",
+								  points => "$line_from_x,$line_from_y "
+								  . "$line_to_x,$line_to_y" );
+	}
+	# Write the tick value.
 	my $y_value_x = 32;
 	my $y_value_y = $y_tick_pos_b + 4;
 	$coordinate_system->Annotate( font => "$font", text => "$y_value",
@@ -253,7 +343,7 @@ my $x_label_x = ( $coord_end_x + $coord_origin_x ) / 2;
 my $x_label_y = $y_size - 5;
 $coordinate_system->Annotate( font => "$font", text => "Time",
 							  pointsize => "13", antialias => "true",
-							  align => "right", fill => "white",
+							  align => "center", fill => "white",
 							  x => "$x_label_x", y => "$x_label_y" );
 my $y_label_x = 12;
 my $y_label_y = ( $coord_origin_y + $coord_end_y ) / 2;
@@ -263,5 +353,5 @@ $coordinate_system->Annotate( font => "$font", text => "Frequency",
 							  x => "$y_label_x", y => "$y_label_y",
 							  rotate => "-90" );
 
-$coordinate_system->Write( "heatmap.png" );
-
+# Write the heapmap image to disk.
+$coordinate_system->Write( filename => "heatmap.jpg", compression => "JPEG" );
