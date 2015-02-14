@@ -28,3 +28,8 @@ The frequency analysis lends itself directly to a 3D (or colored) time/
 frequency plot that displays the intensities of different frequencies versus
 time.  The Scilab script geoplot.sce reads a log file with the output and
 generates such an image; geophone.log is a short sample of the output.
+
+
+Geosampler.ino is a simple piece of software that samples the geophone
+output at a rate of 512 samples per second and outputs the values over the
+serial port.
