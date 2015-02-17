@@ -631,10 +631,8 @@ void report( const short *freq_real, const short *freq_imag, int length,
        frequency_bin++ )
   {
     /* Compute the amplitude. */
-//    double real = (double)freq_real[ frequency_bin ] / 32768.0;
-//    double imag = (double)freq_imag[ frequency_bin ] / 32768.0;
-    double real = (double)freq_real[ frequency_bin ] / 1000.0;
-    double imag = (double)freq_imag[ frequency_bin ] / 1000.0 ;
+    double real = (double)freq_real[ frequency_bin ] / 32768.0;
+    double imag = (double)freq_imag[ frequency_bin ] / 32768.0;
     double amplitude = sqrt( real * real + imag * imag );
     /* Report the frequency bin and the amplitude if the threshold is
        exceeded. */
