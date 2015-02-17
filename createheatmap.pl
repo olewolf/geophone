@@ -2,12 +2,14 @@
 #
 # Create a heatmap based on the frequencies and amplitudes versus
 # time read from a log file specified as argument.
+#
+# USAGE:  createheatmap.pl <logfile>
 
 use strict;
 use Image::Magick;
 use Time::Piece;
 use Date::Parse;
-use Data::Dumper qw(Dumper);
+#use Data::Dumper qw(Dumper);
 
 my $logfile = shift;
 if( $logfile eq "" )
@@ -187,7 +189,7 @@ for( my $i = 0; $i < $heatmap_length; $i++ )
 	@color_map[ $i ] = $color_name;
 }
 
-# Create an empty canvas.
+# Create a coordinate system image.
 my $coordinate_system = Image::Magick->new( );
 my $dot_width  = 1;
 if( $#report_timestamps < 200 )
@@ -200,7 +202,6 @@ $coordinate_system->Set( size => "$plot_width" . "x$y_size" );
 $coordinate_system->ReadImage( "canvas:black" );
 # Compute the dot height based on the height of the image.
 my $number_of_frequency_components = 256;
-#my $dot_height = int( ( $y_size - 2 * $y_margin ) / $number_of_frequency_components );
 my $dot_height = int( ( $y_size - $y_margin_t - $y_margin_b ) / $max_frequency );
 my $x_size = $coordinate_system->Get( "width" );
 
