@@ -30,6 +30,8 @@
    allow several values to be passed per second.  A speed of 38,400 baud
    should suffice for worst case reports of about 2,300 bytes. */
 #define SERIAL_SPEED    115200
+/* Select the serial port (Serial, Serial1, Serial2, etc.). */
+#define SERIAL_PORT     Serial
 
 /* The geophone data is sampled on analog pin 5. */
 #define GEODATA_PIN          5
@@ -202,14 +204,16 @@ void sampling_interrupt( )
 #elif defined( ARDUINO_SAM_DUE )
   const int adc_resolution = 4096;
 #endif
+  /* Read the geodata sample from the analog input. */
   short geodata_sample = analogRead( GEODATA_PIN ) - ( adc_resolution >> 1 );
+  /* Compute a Hamming window weight. */
   const double alpha = 0.54;
   const double beta  = 1.0 - alpha;
   const double N     = (double)( NUMBER_OF_GEODATA_SAMPLES - 1 );
   float hamming_window =
     alpha - beta * cos( 2.0 * M_PI * (double)isr_hamming_window_index / N );
   isr_hamming_window_index++;
-  /* Scale the sample. */
+  /* Scale the sample and apply the Hamming window. */
   const double scale = 8192.0 / adc_resolution;
   geodata_sample = (short)( (double)geodata_sample * hamming_window * scale );
   geodata_samples[ isr_current_geodata_index++ ] = geodata_sample;
@@ -218,12 +222,14 @@ void sampling_interrupt( )
      is active. */
   if( isr_current_geodata_index == NUMBER_OF_GEODATA_SAMPLES )
   {
+    /* The lower buffer has been filled. */
     geodata_samples_real     = &geodata_samples[ 0 ];
     isr_hamming_window_index = 0;
     geodata_buffer_full      = true;
   }
   else if( isr_current_geodata_index == NUMBER_OF_GEODATA_SAMPLES * 2 )
   {
+    /* The upper buffer has been filled. */
     geodata_samples_real      = &geodata_samples[ NUMBER_OF_GEODATA_SAMPLES ];
     isr_current_geodata_index = 0;
     isr_hamming_window_index  = 0;
@@ -477,46 +483,47 @@ void transmit_xbee_payload( const unsigned char *payload,
                             const unsigned char *address_16 )
 {
   static unsigned char frame_id = 1;
-  const int packet_size = 1 + 2 + 1 + 1 + 8 + 2 + 1 + 1 + 1;
-  unsigned char xbee_frame[ packet_size ];
+  const int header_size = 1 + 2 + 1 + 1 + 8 + 2 + 1 + 1 + 1;
+  unsigned char xbee_header[ header_size ];
   int pos = 0;
 
   /* Compose the frame header for a transmit request (0x10). */
-  xbee_frame[ pos++ ] = 0x7e;
-  xbee_frame[ pos++ ] = ( ( packet_size - 4 ) >> 8 ) & 0x00ff;
-  xbee_frame[ pos++ ] = ( packet_size - 4 ) & 0x00ff;
-  xbee_frame[ pos++ ] = 0x10;
+  xbee_header[ pos++ ] = 0x7e;
+  xbee_header[ pos++ ] = ( ( header_size - 3 + payload_size ) >> 8 ) & 0x00ff;
+  xbee_header[ pos++ ] = ( header_size - 3 + payload_size ) & 0x00ff;
+  xbee_header[ pos++ ] = 0x10;
   /* Setup destination address and transmit options. */
-  xbee_frame[ pos++ ] = frame_id;
+  xbee_header[ pos++ ] = frame_id;
   for( int i = 0; i < 8; i++ )
   {
-    xbee_frame[ pos++ ] = address_64[ i ];
+    xbee_header[ pos++ ] = address_64[ i ];
   }
-  xbee_frame[ pos++ ] = address_16[ 0 ];
-  xbee_frame[ pos++ ] = address_16[ 1 ];
-  xbee_frame[ pos++ ] = 0;
+  xbee_header[ pos++ ] = address_16[ 0 ];
+  xbee_header[ pos++ ] = address_16[ 1 ];
+  xbee_header[ pos++ ] = 0;
   /* Options:  retry/repair enabled, encryption enabled, no extended timeout. */
-  xbee_frame[ pos++ ] = 0x20;
+  xbee_header[ pos++ ] = 0x20;
 
   /* Copy the payload header header to the XBee. */
-  Serial.write( xbee_frame, sizeof( xbee_frame ) );
+  SERIAL_PORT.write( xbee_header, sizeof( xbee_header ) );
   /* Copy the payload to the Xbee device. */
-  Serial.write( payload, payload_size );
+  SERIAL_PORT.write( payload, payload_size );
 
   /* Compute the checksum for the payload header. */
-  unsigned char checksum = 0xff;
-  for( int i = 3; i < pos; i++ )
+  unsigned char checksum = 0;
+  for( int i = 3; i < header_size; i++ )
   {
-    checksum += xbee_frame[ i ];
+    checksum += xbee_header[ i ];
   }
   /* Compute the checksum for the payload. */
   for( int i = 0; i < payload_size; i++ )
   {
     checksum += payload[ i ];
   }
+  checksum = (unsigned char)( 0xff - ( checksum & 0x00ff ) );
 
   /* Copy the checksum to the XBee, completing the frame. */
-  Serial.write( checksum );
+  SERIAL_PORT.write( checksum );
 
   /* Advance to the next XBee frame. */
   frame_id = frame_id + 1;
@@ -646,7 +653,7 @@ void report( const short *freq_real, const short *freq_imag, int length,
       else
       {
 #if XBEE_MODE == 0
-        Serial.print( "," );
+        SERIAL_PORT.print( "," );
 #endif
       }
       /* Print the frequency bin and its amplitude. */
@@ -654,9 +661,9 @@ void report( const short *freq_real, const short *freq_imag, int length,
         (double)SAMPLE_RATE / (double)NUMBER_OF_GEODATA_SAMPLES
         * (double)frequency_bin + 0.5;
 #if XBEE_MODE == 0
-      Serial.print( (short)frequency );
-      Serial.print( "," );
-      Serial.print( amplitude, 4 );
+      SERIAL_PORT.print( (short)frequency );
+      SERIAL_PORT.print( "," );
+      SERIAL_PORT.print( amplitude, 4 );
 #else
       /* Add the frequency component / amplitude pair to the binary report. */
       binary_report_bitpos = append_8_bits( binary_report,
@@ -674,7 +681,7 @@ void report( const short *freq_real, const short *freq_imag, int length,
         /* Prepare the header for the next report. */
         binary_report[ 0 ]   = report_id << 4;
         binary_report_bitpos = 4;
-		pairs_in_packet = 0;
+        pairs_in_packet = 0;
       }
 #endif
     }
@@ -684,7 +691,7 @@ void report( const short *freq_real, const short *freq_imag, int length,
   if( first_entry == false )
   {
 #if XBEE_MODE == 0
-    Serial.println( "" );
+    SERIAL_PORT.println( "" );
 #else
     /* Add a frequency component with the value 0 to indicate that this is
        the last entry for this report. */
@@ -753,12 +760,12 @@ void save_amplitude_threshold_to_eeprom( double threshold )
  * Read an XBee frame from the serial port and verify the checksum.  This
  * function should be called regularly.
  *
- * @param [out] payload Buffer for the frame except the frame delimiter.
+ * @param [out] payload Buffer for the frame.
  * @param [out] source_address_64 64-bit source address.
  * @param [out] source_address_16 16-bit source address.
- * @return Total number of bytes in the frame (excluding the delimiter), or
- *          -1 if the checksum was invalid.  If 0 bytes are received, then the
- *         frame hasn't been received yet.
+ * @return Total number of bytes in the frame, or -1 if the checksum was
+ *         invalid.  If 0 bytes are reported received, then the frame
+ *         hasn't been received yet.
  */
 int receive_xbee_frame( unsigned char *frame,
                         unsigned char *source_address_64,
@@ -769,22 +776,58 @@ int receive_xbee_frame( unsigned char *frame,
   static unsigned char checksum;
 
   /* Get a byte from the serial port, if any. */
-  if( Serial.available( ) > 0 )
+  if( SERIAL_PORT.available( ) > 0 )
   {
-    char incoming_byte = Serial.read( );
-	/* Wait for a frame delimiter. */
+    char incoming_byte = SERIAL_PORT.read( );
+    Serial.print( (int)incoming_byte );
+    Serial.print( " " );
+
+    /* Wait for a frame delimiter. */
     if( position == 0 )
     {
       if( incoming_byte != 0x7e )
       {
         return( 0 );
       }
-      reported_frame_size = 3;
-      checksum = 0xff;
+      Serial.println( "Frame delimiter found" );
+      reported_frame_size = 256;
+      checksum = 0;
     }
 
     /* Populate the frame. */
     frame[ position++ ] = incoming_byte;
+
+    /* Read the reported size. */
+    if( position == 3 )
+    {
+      reported_frame_size = (int)( frame[ 1 ] << 8 ) + (int)( frame[ 2 ] & 0x00ff );
+    }
+
+    /* If the entire frame has been received, the last byte was the
+       checksum. */
+    if( position == reported_frame_size + 4 )
+    {
+      /* Reset the frame and report a checksum error if the checksum is
+         invalid. */
+      checksum = 0xff - ( checksum & 0x00ff );
+      if( incoming_byte != checksum )
+      {
+        position = 0;
+        return( -1 );
+      }
+      /* The frame is good so return the reported frame size plus the
+         delimiter, the size word, and the checksum. */
+      else
+      {
+        return( reported_frame_size + 3 );
+      }
+    }
+
+    /* Last byte not received yet; continue computing the checksum. */
+    if( position > 3 )
+    {
+      checksum += incoming_byte;
+    }
 
     /* If the maximum frame size is exceeded, reset the frame and report
        error. */
@@ -792,35 +835,6 @@ int receive_xbee_frame( unsigned char *frame,
     {
       position = 0;
       return( -1 );
-    }
-
-    /* Read the reported size. */
-    else if( position == 2 )
-    {
-      reported_frame_size = frame[ 0 ] << 8 | frame[ 1 ];
-    }
-    else if( position > 2 )
-    {
-      checksum += incoming_byte;
-    }
-
-    /* If the entire frame has been received, the last byte was the
-       checksum. */
-    if( position == reported_frame_size )
-    {
-      /* Reset the frame and report a checksum error if the checksum is
-         invalid. */
-      if( incoming_byte != checksum )
-      {
-        position = 0;
-        return( -1 );
-      }
-      /* The frame is good so return the reported frame size plus the size
-         bytes and the checksum. */
-      else
-      {
-        return( reported_frame_size + 3 );
-      }
     }
   }
 
@@ -875,9 +889,9 @@ double get_new_threshold_xbee_mode( )
  */
 void flush_serial_input( )
 {
-  while( Serial.available( ) > 0 )
+  while( SERIAL_PORT.available( ) > 0 )
   {
-    Serial.read( );
+    SERIAL_PORT.read( );
   }
 }
 
@@ -907,13 +921,13 @@ double get_new_threshold( )
   /* Timeout if characters are not being received swiftly enough. */
   if( ( threshold_string_pos > 0 ) && ( timestamp + timeout < millis( ) ) )
   {
-    Serial.println( "E:TIMEOUT" );
+    SERIAL_PORT.println( "E:TIMEOUT" );
     flush_serial_input( );
     threshold_string_pos = 0;
   }
 
   /* Read the next byte from the serial port, if any. */
-  else if( Serial.available( ) > 0 )
+  else if( SERIAL_PORT.available( ) > 0 )
   {
     /* The first byte should start a timeout counter.  The entire string
        is discarded if the timer expires before the value has been
@@ -925,7 +939,7 @@ double get_new_threshold( )
 
     if( threshold_string_pos < sizeof( threshold_string ) - 1 )
     {
-      char incoming_byte = Serial.read( );
+      char incoming_byte = SERIAL_PORT.read( );
       /* Attempt to parse the new threshold value once a newline is received. */
       if( incoming_byte == '\r' || incoming_byte == '\n' )
       {
@@ -935,13 +949,13 @@ double get_new_threshold( )
         if( threshold < 0.0 || threshold >= 1.0 )
         {
           threshold = -1.0;
-          Serial.println( "E:OVERFLOW" );
+          SERIAL_PORT.println( "E:OVERFLOW" );
         }
         /* The threshold value is valid so report success. */
         else
         {
-          Serial.print( "OK:" );
-          Serial.println( threshold );
+          SERIAL_PORT.print( "OK:" );
+          SERIAL_PORT.println( threshold_string );
         }
         flush_serial_input( );
         threshold_string_pos = 0;
@@ -957,7 +971,7 @@ double get_new_threshold( )
       /* Any invalid byte resets the string. */
       else
       {
-        Serial.println( "E:NON-NUMERIC" );
+        SERIAL_PORT.println( "E:NON-NUMERIC" );
         flush_serial_input( );
         threshold_string_pos = 0;
       }
@@ -965,7 +979,7 @@ double get_new_threshold( )
     /* Too much junk in the input buffer; discard everything. */
     else
     {
-      Serial.println( "E:FLUSH" );
+      SERIAL_PORT.println( "E:FLUSH" );
       flush_serial_input( );
       threshold_string_pos = 0;
     }
@@ -990,7 +1004,7 @@ void setup()
   amplitude_threshold = read_amplitude_threshold_from_eeprom( );
 
   /* Initialize the serial port with the desired speed. */
-  Serial.begin( SERIAL_SPEED );
+  SERIAL_PORT.begin( SERIAL_SPEED );
 
   /* Setup the geophone data sampling buffers and sampling interrupt. */
   start_sampling( );
@@ -1041,8 +1055,8 @@ void loop()
        data:  otherwise the redundant information would be spread out
        in the output data and we would have to use bit-reversed addressing
        to pick the non-redundant values from the array anyway.) */
-    report( geodata_samples_real, &geodata_samples_imag[ 0 ],
-            NUMBER_OF_GEODATA_SAMPLES / 2 + 1, amplitude_threshold );
+//    report( geodata_samples_real, &geodata_samples_imag[ 0 ],
+//            NUMBER_OF_GEODATA_SAMPLES / 2 + 1, amplitude_threshold );
   }
 
   /* Read any new threshold value that may be provided.  Update the threshold
