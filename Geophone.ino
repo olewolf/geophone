@@ -63,8 +63,7 @@
 
 /* Make an LED blink on every successful report. */
 #define REPORT_BLINK_ENABLED    1
-//#define REPORT_BLINK_LED_PIN  13
-#define REPORT_BLINK_LED_PIN   52
+#define REPORT_BLINK_LED_PIN   13
 
 /* Default threshold for reporting amplitudes. */
 #define DEFAULT_AMPLITUDE_THRESHOLD  0.1
@@ -211,12 +210,15 @@ void sampling_interrupt( )
   const double alpha = 0.54;
   const double beta  = 1.0 - alpha;
   const double N     = (double)( NUMBER_OF_GEODATA_SAMPLES - 1 );
-  float hamming_window =
-    alpha - beta * cos( 2.0 * M_PI * (double)isr_hamming_window_index / N );
+//  double hamming_window =
+//    alpha - beta * cos( 2.0 * M_PI * (double)isr_hamming_window_index / N );
+  /* Apply a rectangular window because apparently the samples get too attenuated. */
+  double hamming_window = 1.0;
   isr_hamming_window_index++;
   /* Scale the sample and apply the Hamming window. */
   //const double scale = 8192.0 / adc_resolution;
-  const double scale = 32768.0 / adc_resolution;
+  //const double scale = 32768.0 / adc_resolution;
+  const double scale = 65536.0 / adc_resolution;
   geodata_sample = (short)( (double)geodata_sample * hamming_window * scale );
   geodata_samples[ isr_current_geodata_index++ ] = geodata_sample;
 
