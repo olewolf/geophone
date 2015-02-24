@@ -26,26 +26,37 @@
 #endif
 
 
-/* Serial speed for the report generation.  It should be fast enough to
-   allow several values to be passed per second.  A speed of 38,400 baud
-   should suffice for worst case reports of about 2,300 bytes. */
-#define SERIAL_SPEED    115200
-/* Select the serial port (Serial, Serial1, Serial2, etc.). */
-#define SERIAL_PORT     Serial
 
 /* The geophone data is sampled on analog pin 5. */
 #define GEODATA_PIN          5
 
-/* Define "XBee mode" where the report is provided in a binary format in
-   multiple packets with the following format:
+/* Enable a human-readable report on the serial port. */
+#define HUMAN_READABLE_REPORT_ENABLED  1
+
+/* Select the serial port (Serial, Serial1, Serial2, etc.).  The plain
+   serial port is for outputting the readable format of the report. */
+#define SERIAL_PORT        Serial
+/* Serial speed for the report generation.  It should be fast enough to
+   allow several values to be passed per second.  A speed of 38,400 baud
+   should suffice for worst case reports of about 2,300 bytes. */
+#define SERIAL_SPEED       115200
+
+/* If XBee is enabled, then a report is transmitted over the XBEE_SERIAL_PORT
+   in a binary format in multiple packets with the following format:
 
    [ ReportID  { Frequency0 Amplitude0 }..{ FrequencyN AmplitudeN }  0 ]
       4              8         12       ..       8         12        8   (bits)
 
    Identical IDs indicate that packets belong to the same analysis.  The
-   checksum is a simple XOR of the bytes in the packets.  XBee mode also
-   forces the SERIAL_SPEED to 115200. */
-#define XBEE_MODE                    0
+   checksum is a simple XOR of the bytes in the packets. */
+#define XBEE_ENABLED                 0
+
+/* The XBee serial port is for outputting the report in a packed format
+   and embedded in an XBee API frame. */
+#define XBEE_SERIAL_PORT    Serial1
+#define XBEE_SERIAL_SPEED   115200
+#define XBEE_SERIAL_CONFIG  SERIAL_8N2
+
 /* An XBee payload size is 84, or 66 if the message is encrypted.  (Otherwise
    the payload will be fragmented but let's stay in control.) */
 #define MAX_XBEE_PAYLOAD_SIZE        66
@@ -63,7 +74,8 @@
 
 /* Make an LED blink on every successful report. */
 #define REPORT_BLINK_ENABLED    1
-#define REPORT_BLINK_LED_PIN   13
+//#define REPORT_BLINK_LED_PIN  13
+#define REPORT_BLINK_LED_PIN   52
 
 /* Default threshold for reporting amplitudes. */
 #define DEFAULT_AMPLITUDE_THRESHOLD  0.1
@@ -206,20 +218,24 @@ void sampling_interrupt( )
 #endif
   /* Read the geodata sample from the analog input. */
   short geodata_sample = analogRead( GEODATA_PIN ) - ( adc_resolution >> 1 );
-  /* Compute a Hamming window weight. */
+  /* To apply a Hamming window, use the following code. */
+  /*
   const double alpha = 0.54;
   const double beta  = 1.0 - alpha;
   const double N     = (double)( NUMBER_OF_GEODATA_SAMPLES - 1 );
-//  double hamming_window =
-//    alpha - beta * cos( 2.0 * M_PI * (double)isr_hamming_window_index / N );
-  /* Apply a rectangular window because apparently the samples get too attenuated. */
-  double hamming_window = 1.0;
+  double hamming_window =
+    alpha - beta * cos( 2.0 * M_PI * (double)isr_hamming_window_index / N );
   isr_hamming_window_index++;
-  /* Scale the sample and apply the Hamming window. */
+  */
+  /* But, we apply a rectangular window instead because apparently the
+     samples get too attenuated with the Hamming window. */
+  double rectangular_window = 1.0;
+  /* Scale the sample and apply the window weight. */
+  double window = rectangular_window;
   //const double scale = 8192.0 / adc_resolution;
   //const double scale = 32768.0 / adc_resolution;
   const double scale = 65536.0 / adc_resolution;
-  geodata_sample = (short)( (double)geodata_sample * hamming_window * scale );
+  geodata_sample = (short)( (double)geodata_sample * window * scale );
   geodata_samples[ isr_current_geodata_index++ ] = geodata_sample;
 
   /* Raise a semaphor if the buffer is full and tell which buffer
@@ -509,9 +525,9 @@ void transmit_xbee_payload( const unsigned char *payload,
   xbee_frame[ pos++ ] = 0x20;
 
   /* Copy the payload header header to the XBee. */
-  SERIAL_PORT.write( xbee_frame, sizeof( xbee_frame ) );
+  XBEE_SERIAL_PORT.write( xbee_frame, sizeof( xbee_frame ) );
   /* Copy the payload to the Xbee device. */
-  SERIAL_PORT.write( payload, payload_size );
+  XBEE_SERIAL_PORT.write( payload, payload_size );
 
   /* Compute the checksum for the payload header. */
   unsigned char checksum = 0xff;
@@ -526,7 +542,7 @@ void transmit_xbee_payload( const unsigned char *payload,
   }
 
   /* Copy the checksum to the XBee, completing the frame. */
-  SERIAL_PORT.write( checksum );
+  XBEE_SERIAL_PORT.write( checksum );
 
   /* Advance to the next XBee frame. */
   frame_id = frame_id + 1;
@@ -613,7 +629,7 @@ void report( const short *freq_real, const short *freq_imag, int length,
 {
   bool first_entry = true;
 
-#if XBEE_MODE != 0
+#if XBEE_ENABLED != 0
   const unsigned char xbee_address_64[ ] = XBEE_DESTINATION_ADDRESS_64;
   const unsigned char xbee_address_16[ ] = XBEE_DESTINATION_ADDRESS_16;
 
@@ -655,7 +671,7 @@ void report( const short *freq_real, const short *freq_imag, int length,
       }
       else
       {
-#if XBEE_MODE == 0
+#if HUMAN_READABLE_REPORT_ENABLED == 1
         SERIAL_PORT.print( "," );
 #endif
       }
@@ -663,11 +679,13 @@ void report( const short *freq_real, const short *freq_imag, int length,
       double frequency =
         (double)SAMPLE_RATE / (double)NUMBER_OF_GEODATA_SAMPLES
         * (double)frequency_bin + 0.5;
-#if XBEE_MODE == 0
+#if HUMAN_READABLE_REPORT_ENABLED == 1
       SERIAL_PORT.print( (short)frequency );
       SERIAL_PORT.print( "," );
       SERIAL_PORT.print( amplitude, 4 );
-#else
+#endif
+
+#if XBEE_ENABLED != 0
       /* Add the frequency component / amplitude pair to the binary report. */
       binary_report_bitpos = append_8_bits( binary_report,
                                             (unsigned char)frequency,
@@ -693,9 +711,10 @@ void report( const short *freq_real, const short *freq_imag, int length,
      report LED blinking that the report was submitted. */
   if( first_entry == false )
   {
-#if XBEE_MODE == 0
+#if HUMAN_READABLE_REPORT_ENABLED == 1
     SERIAL_PORT.println( "" );
-#else
+#endif
+#if XBEE_ENABLED != 0
     /* Add a frequency component with the value 0 to indicate that this is
        the last entry for this report. */
     binary_report_bitpos = append_8_bits( binary_report, 0,
@@ -703,9 +722,9 @@ void report( const short *freq_real, const short *freq_imag, int length,
     transmit_xbee_payload( binary_report, binary_report_bitpos >> 3,
                            xbee_address_64, xbee_address_16 );
 
-	report_id = report_id + 1;
+    report_id = report_id + 1;
 #endif
-	report_was_created = true;
+    report_was_created = true;
   }
 }
 
@@ -779,9 +798,9 @@ int receive_xbee_frame( unsigned char *frame,
   static unsigned char checksum;
 
   /* Get a byte from the serial port, if any. */
-  if( SERIAL_PORT.available( ) > 0 )
+  if( XBEE_SERIAL_PORT.available( ) > 0 )
   {
-    char incoming_byte = SERIAL_PORT.read( );
+    char incoming_byte = XBEE_SERIAL_PORT.read( );
 	/* Wait for a frame delimiter. */
     if( position == 0 )
     {
@@ -903,11 +922,14 @@ void flush_serial_input( )
  * The function responds with "OK" if the number was successfully read or
  * provides a brief error message otherwise.
  *
+ * If XBee is enabled, the new threshold is read from the XBee serial port
+ * instead via the function get_new_threshold_xbee_mode().
+ *
  * @return New threshold value, or negative if no new value was provided.
  */
 double get_new_threshold( )
 {
-#if XBEE_MODE == 0
+#if XBEE_ENABLED == 0
   static char          threshold_string[ 20 ];
   static int           threshold_string_pos = 0;
   static unsigned long timestamp;
@@ -982,7 +1004,7 @@ double get_new_threshold( )
   }
   return( -1.0 );
 
-#else /* XBee mode */
+#else /* XBee enabled */
   return( get_new_threshold_xbee_mode( ) );
 #endif
 }
@@ -1001,6 +1023,11 @@ void setup()
 
   /* Initialize the serial port with the desired speed. */
   SERIAL_PORT.begin( SERIAL_SPEED );
+
+  /* Initialize the XBee serial port, if enabled. */
+#if XBEE_ENABLED != 0
+  XBEE_SERIAL_PORT.begin( XBEE_SERIAL_SPEED, XBEE_SERIAL_CONFIG );
+#endif
 
   /* Setup the analog input. */
   pinMode( GEODATA_PIN, INPUT );
