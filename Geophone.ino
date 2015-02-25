@@ -31,7 +31,7 @@
 #define GEODATA_PIN          5
 
 /* Enable a human-readable report on the serial port. */
-#define HUMAN_READABLE_REPORT_ENABLED  1
+#define HUMAN_READABLE_REPORT_ENABLED  0
 
 /* Select the serial port (Serial, Serial1, Serial2, etc.).  The plain
    serial port is for outputting the readable format of the report. */
@@ -49,7 +49,7 @@
 
    Identical IDs indicate that packets belong to the same analysis.  The
    checksum is a simple XOR of the bytes in the packets. */
-#define XBEE_ENABLED                 0
+#define XBEE_ENABLED                 1
 
 /* The XBee serial port is for outputting the report in a packed format
    and embedded in an XBee API frame. */
@@ -503,14 +503,14 @@ void transmit_xbee_payload( const unsigned char *payload,
                             const unsigned char *address_16 )
 {
   static unsigned char frame_id = 1;
-  const int packet_size = 1 + 2 + 1 + 1 + 8 + 2 + 1 + 1 + 1;
-  unsigned char xbee_frame[ packet_size ];
+  const int header_size = 1 + 2 + 1 + 1 + 8 + 2 + 1 + 1;
+  unsigned char xbee_frame[ header_size ];
   int pos = 0;
 
   /* Compose the frame header for a transmit request (0x10). */
   xbee_frame[ pos++ ] = 0x7e;
-  xbee_frame[ pos++ ] = ( ( packet_size - 4 ) >> 8 ) & 0x00ff;
-  xbee_frame[ pos++ ] = ( packet_size - 4 ) & 0x00ff;
+  xbee_frame[ pos++ ] = ( ( header_size + payload_size - 3 ) >> 8 ) & 0x00ff;
+  xbee_frame[ pos++ ] = ( header_size + payload_size - 3 ) & 0x00ff;
   xbee_frame[ pos++ ] = 0x10;
   /* Setup destination address and transmit options. */
   xbee_frame[ pos++ ] = frame_id;
@@ -520,18 +520,18 @@ void transmit_xbee_payload( const unsigned char *payload,
   }
   xbee_frame[ pos++ ] = address_16[ 0 ];
   xbee_frame[ pos++ ] = address_16[ 1 ];
-  xbee_frame[ pos++ ] = 0;
   /* Options:  retry/repair enabled, encryption enabled, no extended timeout. */
+  xbee_frame[ pos++ ] = 0;
   xbee_frame[ pos++ ] = 0x20;
 
   /* Copy the payload header header to the XBee. */
-  XBEE_SERIAL_PORT.write( xbee_frame, sizeof( xbee_frame ) );
+  XBEE_SERIAL_PORT.write( xbee_frame, header_size );
   /* Copy the payload to the Xbee device. */
   XBEE_SERIAL_PORT.write( payload, payload_size );
 
   /* Compute the checksum for the payload header. */
-  unsigned char checksum = 0xff;
-  for( int i = 3; i < pos; i++ )
+  unsigned char checksum = 0x00;
+  for( int i = 3; i < header_size; i++ )
   {
     checksum += xbee_frame[ i ];
   }
@@ -542,6 +542,7 @@ void transmit_xbee_payload( const unsigned char *payload,
   }
 
   /* Copy the checksum to the XBee, completing the frame. */
+  checksum = 0xff - checksum;
   XBEE_SERIAL_PORT.write( checksum );
 
   /* Advance to the next XBee frame. */
