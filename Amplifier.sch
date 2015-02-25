@@ -17913,7 +17913,7 @@ Copyright (C) 2015 Ole Wolf</text>
 <instance part="JP2" gate="G$1" x="267.97" y="55.88" rot="MR0"/>
 <instance part="C10" gate="G$1" x="238.76" y="66.04"/>
 <instance part="SUPPLY3" gate="G$1" x="247.65" y="76.2"/>
-<instance part="R15" gate="G$1" x="226.06" y="48.26" rot="R180"/>
+<instance part="R15" gate="G$1" x="226.06" y="48.26"/>
 <instance part="J1" gate="G$1" x="172.72" y="106.68"/>
 <instance part="SUPPLY4" gate="G$1" x="138.43" y="119.38"/>
 <instance part="GND1" gate="1" x="25.4" y="19.05"/>
@@ -18180,15 +18180,10 @@ Copyright (C) 2015 Ole Wolf</text>
 <wire x1="238.76" y1="60.96" x2="238.76" y2="53.34" width="0.1524" layer="91"/>
 <junction x="238.76" y="53.34"/>
 <junction x="238.76" y="41.91"/>
-<pinref part="R15" gate="G$1" pin="E"/>
 <wire x1="238.76" y1="41.91" x2="226.06" y2="41.91" width="0.1524" layer="91"/>
-<wire x1="226.06" y1="41.91" x2="226.06" y2="43.18" width="0.1524" layer="91"/>
-<pinref part="R15" gate="G$1" pin="S"/>
-<wire x1="220.98" y1="48.26" x2="219.71" y2="48.26" width="0.1524" layer="91"/>
-<wire x1="219.71" y1="48.26" x2="219.71" y2="41.91" width="0.1524" layer="91"/>
-<wire x1="219.71" y1="41.91" x2="226.06" y2="41.91" width="0.1524" layer="91"/>
-<junction x="226.06" y="41.91"/>
 <pinref part="GND8" gate="1" pin="GND"/>
+<pinref part="R15" gate="G$1" pin="A"/>
+<wire x1="226.06" y1="41.91" x2="226.06" y2="43.18" width="0.1524" layer="91"/>
 </segment>
 <segment>
 <pinref part="C9" gate="G$1" pin="-"/>
@@ -18227,19 +18222,17 @@ Copyright (C) 2015 Ole Wolf</text>
 </net>
 <net name="GEOPHONE_OUT" class="0">
 <segment>
-<pinref part="R14" gate="G$1" pin="1"/>
-<wire x1="223.52" y1="55.88" x2="226.06" y2="55.88" width="0.1524" layer="91"/>
 <pinref part="JP2" gate="G$1" pin="2"/>
-<wire x1="226.06" y1="55.88" x2="255.27" y2="55.88" width="0.1524" layer="91"/>
-<pinref part="R15" gate="G$1" pin="A"/>
 <wire x1="255.27" y1="55.88" x2="260.35" y2="55.88" width="0.1524" layer="91"/>
-<wire x1="226.06" y1="53.34" x2="226.06" y2="55.88" width="0.1524" layer="91"/>
-<junction x="226.06" y="55.88"/>
 <pinref part="D1" gate="G$1" pin="A"/>
 <wire x1="255.27" y1="62.23" x2="255.27" y2="55.88" width="0.1524" layer="91"/>
 <junction x="255.27" y="55.88"/>
 <pinref part="D2" gate="G$1" pin="C"/>
 <wire x1="255.27" y1="55.88" x2="255.27" y2="49.53" width="0.1524" layer="91"/>
+<wire x1="233.68" y1="48.26" x2="233.68" y2="55.88" width="0.1524" layer="91"/>
+<wire x1="233.68" y1="55.88" x2="255.27" y2="55.88" width="0.1524" layer="91"/>
+<pinref part="R15" gate="G$1" pin="S"/>
+<wire x1="231.14" y1="48.26" x2="233.68" y2="48.26" width="0.1524" layer="91"/>
 </segment>
 <segment>
 <pinref part="J1" gate="G$1" pin="A5"/>
@@ -18269,6 +18262,14 @@ Copyright (C) 2015 Ole Wolf</text>
 <wire x1="129.54" y1="93.98" x2="138.43" y2="93.98" width="0.1524" layer="91"/>
 <pinref part="L1" gate="G$1" pin="2"/>
 <wire x1="138.43" y1="93.98" x2="138.43" y2="101.6" width="0.1524" layer="91"/>
+</segment>
+</net>
+<net name="N$18" class="0">
+<segment>
+<pinref part="R14" gate="G$1" pin="1"/>
+<wire x1="223.52" y1="55.88" x2="226.06" y2="55.88" width="0.1524" layer="91"/>
+<pinref part="R15" gate="G$1" pin="E"/>
+<wire x1="226.06" y1="55.88" x2="226.06" y2="53.34" width="0.1524" layer="91"/>
 </segment>
 </net>
 </nets>
