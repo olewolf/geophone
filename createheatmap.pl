@@ -115,11 +115,13 @@ my $max_timestamp = 0;
 my $min_frequency = 0;
 my $max_frequency = 0;
 my $has_real_timestamps = 0;
+
 foreach my $log_entry( @log )
 {
 	my @frequencies;
 	my @amplitudes;
 
+	chomp $log_entry;
 	my $log_entry_begin = substr $log_entry, 0, 2;
 	if( $log_entry_begin ne "E:" && $log_entry_begin ne "OK" )
 	{
@@ -150,7 +152,7 @@ foreach my $log_entry( @log )
 			$max_timestamp = $log_timestamp;
 		}
 		$timestamp = $timestamp + 1;
-
+		
 		# Read the frequencies and the amplitudes.
 		my @values = split /,/, $log_entry;
 		my $pairs_reported = ( $#values + 1 ) / 2;
@@ -174,6 +176,8 @@ foreach my $log_entry( @log )
 		$report_index = $report_index + 1;
 	}
 }
+
+
 
 # Create an array of color names based on the heatmap colors.
 my $heatmap = Image::Magick->new( );
@@ -222,9 +226,10 @@ sub translate_x
 }
 
 
+
 # Plot the dots, colored according to the color map.
 my $entries = $#report_timestamps;
-for( my $report_index = 0; $report_index < $entries; $report_index++ )
+for( my $report_index = 0; $report_index <= $entries; $report_index++ )
 {
 	my $timestamp   = $report_timestamps[ $report_index ];
 	my @frequencies = split /,/, $report_frequencies[ $report_index ];
@@ -233,7 +238,7 @@ for( my $report_index = 0; $report_index < $entries; $report_index++ )
 	# Translate the x position according to the lowest timestamp.
 	my $x_dot = translate_x( $timestamp );
 
-	my $number_of_pairs = $#frequencies;
+	my $number_of_pairs = $#frequencies + 1;
 	for( my $pair = 0; $pair < $number_of_pairs; $pair++ )
 	{
 		my $frequency = $frequencies[ $pair ];
@@ -252,6 +257,7 @@ for( my $report_index = 0; $report_index < $entries; $report_index++ )
 								  points => "$x_dot,$y_dot $x_width,$y_width" );
 	}
 }
+
 # Blur the image slightly to make it easier on the eyes.
 $coordinate_system->AdaptiveBlur( radius => 3, sigma => 1.2 );
 
@@ -313,6 +319,9 @@ for( my $x_tick_pos = $first_x_aligned_timestamp;
 	$x_value = $x_value + $x_resolution;
 
 }
+
+# There seems to be a bug somewhere in the following for() loop that
+# prevents some logs from being plotted.
 my $y_value = 0;
 for( my $y_tick_pos_b = $coord_origin_y; $y_tick_pos_b >= $coord_end_y;
 	 $y_tick_pos_b -= $y_resolution * $dot_height )
@@ -335,6 +344,7 @@ for( my $y_tick_pos_b = $coord_origin_y; $y_tick_pos_b >= $coord_end_y;
 								  x => "$y_value_x", y => "$y_value_y" );
 	$y_value = $y_value + $y_resolution;
 }
+
 
 # Plot labels.
 my $x_label_x = ( $coord_end_x + $coord_origin_x ) / 2;
