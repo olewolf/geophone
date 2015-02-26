@@ -64,13 +64,16 @@
    necessary.  */
 #define XBEE_RESET_PIN      51
 
+/* XBee destination address for the report; in this case the XBee coordinator. */
+#define XBEE_DESTINATION_ADDRESS_64  { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
+#define XBEE_DESTINATION_ADDRESS_16  { 0xff, 0xfe }
 /* An XBee payload size is 84, or 66 if the message is encrypted.  (Otherwise
    the payload will be fragmented but let's stay in control.) */
 #define MAX_XBEE_PAYLOAD_SIZE        66
 #define MAX_XBEE_FRAME_SIZE          110
-/* XBee destination address for the report; in this case the XBee coordinator. */
-#define XBEE_DESTINATION_ADDRESS_64  { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
-#define XBEE_DESTINATION_ADDRESS_16  { 0xff, 0xfe }
+/* Define a delay in milliseconds between packets sent to the XBee radio so that
+   its serial port gets time to flush. */
+#define XBEE_TRANSMIT_DELAY 100
 
 /* Report only frequency components within the range of the geophone sensor
    and the amplifier's bandpass setting.  For example with an SM-24 geophone
@@ -227,23 +230,16 @@ void sampling_interrupt( )
   /* Read the geodata sample from the analog input. */
   short geodata_sample = analogRead( GEODATA_PIN )
                          - ( adc_resolution >> 1 ) - GEODATA_DC_OFFSET;
-  /* To apply a Hamming window, use the following code. */
-  /*
+  /* Compute the Hamming window weight. */
   const double alpha = 0.54;
   const double beta  = 1.0 - alpha;
   const double N     = (double)( NUMBER_OF_GEODATA_SAMPLES - 1 );
   double hamming_window =
     alpha - beta * cos( 2.0 * M_PI * (double)isr_hamming_window_index / N );
   isr_hamming_window_index++;
-  */
-  /* But, we apply a rectangular window instead because apparently the
-     samples get too attenuated with the Hamming window. */
-  double rectangular_window = 1.0;
   /* Scale the sample and apply the window weight. */
-  double window = rectangular_window;
-  //const double scale = 8192.0 / adc_resolution;
-  const int scale = 32768.0 / adc_resolution;
-  //const double scale = 65536.0 / adc_resolution;
+  double window = hamming_window;
+  const int scale = window * 32768.0 / adc_resolution;
   geodata_sample = (short)( (double)geodata_sample * (double)scale );
   geodata_samples[ isr_current_geodata_index++ ] = geodata_sample;
 
@@ -708,8 +704,10 @@ void report( const short *freq_real, const short *freq_imag, int length,
       /* Transmit the packet if the payload size is about to exceed maximum. */
       if ( pairs_in_packet > max_pairs_per_packet )
       {
-        transmit_xbee_payload( binary_report, binary_report_bitpos >> 3,
+        transmit_xbee_payload( binary_report, ( binary_report_bitpos + 7 ) >> 3,
                                xbee_address_64, xbee_address_16 );
+        /* Allow the XBee to flush its serial port. */
+        delay( XBEE_TRANSMIT_DELAY );
         /* Prepare the header for the next report. */
         binary_report[ 0 ]   = report_id << 4;
         binary_report_bitpos = 4;
@@ -730,7 +728,7 @@ void report( const short *freq_real, const short *freq_imag, int length,
        the last entry for this report. */
     binary_report_bitpos = append_8_bits( binary_report, 0,
                                           binary_report_bitpos );
-    transmit_xbee_payload( binary_report, binary_report_bitpos >> 3,
+    transmit_xbee_payload( binary_report, ( binary_report_bitpos + 7 ) >> 3,
                            xbee_address_64, xbee_address_16 );
 
     report_id = report_id + 1;
@@ -1037,8 +1035,18 @@ void setup()
   /* Initialize the serial port with the desired speed. */
   SERIAL_PORT.begin( SERIAL_SPEED );
 
-  /* Initialize the XBee serial port, if enabled. */
 #if XBEE_ENABLED != 0
+  /* Reset the XBee because for some reason that's necessary. But actually,
+     even this code doesn't cut it. The XBee needs to be reset from the
+     coordinator via a remote AT command. Must look into this. */
+/*
+  delay( 250 );
+  pinMode( XBEE_RESET_PIN, OUTPUT );
+  digitalWrite( XBEE_RESET_PIN, LOW );
+  delay( 50 );
+  digitalWrite( XBEE_RESET_PIN, HIGH );
+*/
+  /* Initialize the XBee serial port. */
   XBEE_SERIAL_PORT.begin( XBEE_SERIAL_SPEED, XBEE_SERIAL_CONFIG );
 #endif
 
@@ -1059,14 +1067,6 @@ void setup()
     pinMode( REPORT_BLINK_LED_PIN, OUTPUT );
     digitalWrite( REPORT_BLINK_LED_PIN, LOW );
   }
-
-#if XBEE_ENABLED != 0
-  /* Reset the XBee because for some reason that's necessary. */
-  pinMode( XBEE_RESET_PIN, OUTPUT );
-  digitalWrite( XBEE_RESET_PIN, LOW );
-  delay( 10 );
-  digitalWrite( XBEE_RESET_PIN, HIGH );
-#endif
 }
 
 
@@ -1088,7 +1088,6 @@ void loop()
     {
       geodata_samples_imag_l[ i ] = 0ul;
     }
-
     /* Compute the Fourier transform in-place. */
     fft_radix2_512( geodata_samples_real, &geodata_samples_imag[ 0 ] );
     bit_reverse_complex( geodata_samples_real, &geodata_samples_imag[ 0 ],
@@ -1102,15 +1101,6 @@ void loop()
        to pick the non-redundant values from the array anyway.) */
     report( geodata_samples_real, &geodata_samples_imag[ 0 ],
             NUMBER_OF_GEODATA_SAMPLES / 2 + 1, amplitude_threshold );
-
-/*
-    for( int i = 0; i < NUMBER_OF_GEODATA_SAMPLES - 1; i++ )
-    {
-      Serial.print( geodata_samples_real[ i ] );
-      Serial.print( "," );
-    }
-    Serial.println( geodata_samples_real[ NUMBER_OF_GEODATA_SAMPLES - 1 ] );
-*/
 
     geodata_buffer_full = false;
   }
