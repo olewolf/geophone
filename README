@@ -33,3 +33,8 @@ generates such an image; geophone.log is a short sample of the output.
 Geosampler.ino is a simple piece of software that samples the geophone
 output at a rate of 512 samples per second and outputs the values over the
 serial port.
+
+read-serial-log.c provides sample C code that reads the serial output from
+Geophone.ino and adds a timestamp.  The output may be plotted using the
+createheatmap.pl perl script, which generates a JPEG file with the graphical
+output.

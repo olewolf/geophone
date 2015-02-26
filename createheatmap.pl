@@ -22,7 +22,7 @@ if( $logfile eq "" )
 my $desired_colormap = "spectral";
 
 # The total number of pixels in the Y direction.
-my $y_size       = 220;
+my $y_size       = 250;
 # Margins for the frequency plot, not including axes.
 my $x_margin_l   = 40;
 my $x_margin_r   = 40;
@@ -129,7 +129,10 @@ foreach my $log_entry( @log )
 		# Otherwise, assume there's an entry per second (beginning at
 		# time = 0).
 		my $test = $log_entry;
-		$test =~ /([a-zA-Z]{3} [a-zA-Z]{3} [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [a-zA-Z]{3} [0-9]{4}) (.*)/;
+#		$test =~ /([a-zA-Z]{3} [a-zA-Z]{3} [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]{4}) (.*)/;
+
+#		$test =~ /([a-zA-Z]{3} [a-zA-Z]{3} [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [a-zA-Z]{3} [0-9]{4}) (.*)/;
+		$test =~ /([a-zA-Z]{3} [a-zA-Z]{3} [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]{4}) (.*)/;
 		my( $log_timestamp, $measurements ) = ( $1, $2 );
 		if( $log_timestamp eq "" )
 		{
@@ -258,6 +261,8 @@ for( my $report_index = 0; $report_index <= $entries; $report_index++ )
 	}
 }
 
+
+
 # Blur the image slightly to make it easier on the eyes.
 $coordinate_system->AdaptiveBlur( radius => 3, sigma => 1.2 );
 
@@ -320,8 +325,6 @@ for( my $x_tick_pos = $first_x_aligned_timestamp;
 
 }
 
-# There seems to be a bug somewhere in the following for() loop that
-# prevents some logs from being plotted.
 my $y_value = 0;
 for( my $y_tick_pos_b = $coord_origin_y; $y_tick_pos_b >= $coord_end_y;
 	 $y_tick_pos_b -= $y_resolution * $dot_height )
