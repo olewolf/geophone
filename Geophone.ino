@@ -29,9 +29,11 @@
 
 /* The geophone data is sampled on analog pin 5. */
 #define GEODATA_PIN          5
+/* Value for zero input, i.e., DC value, at the analog input. */
+#define GEODATA_DC_OFFSET    159
 
 /* Enable a human-readable report on the serial port. */
-#define HUMAN_READABLE_REPORT_ENABLED  0
+#define HUMAN_READABLE_REPORT_ENABLED  1
 
 /* Select the serial port (Serial, Serial1, Serial2, etc.).  The plain
    serial port is for outputting the readable format of the report. */
@@ -42,26 +44,31 @@
 #define SERIAL_SPEED       115200
 
 /* If XBee is enabled, then a report is transmitted over the XBEE_SERIAL_PORT
-   in a binary format in multiple packets with the following format:
+   in a binary format in multiple packets with the following slightly
+   compressed format:
 
-   [ ReportID  { Frequency0 Amplitude0 }..{ FrequencyN AmplitudeN }  0 ]
-      4              8         12       ..       8         12        8   (bits)
+   [ ReportID  { Frequency0 Amplitude0 }..{ FrequencyN AmplitudeN }  ]
+      4              8         12       ..       8         12          (bits)
 
-   Identical IDs indicate that packets belong to the same analysis.  The
-   checksum is a simple XOR of the bytes in the packets. */
-#define XBEE_ENABLED                 1
-
+   Identical IDs indicate that packets are part of the same report. The end
+   of a report is indicated by a frequency of 0 and no amplitude. */
+#define XBEE_ENABLED        0
 /* The XBee serial port is for outputting the report in a packed format
-   and embedded in an XBee API frame. */
+   and embedded in an XBee API frame. The serial port uses two stop bits
+   because I recall reading this is necessary at speeds of 115200 baud and
+   above. */
 #define XBEE_SERIAL_PORT    Serial1
 #define XBEE_SERIAL_SPEED   115200
 #define XBEE_SERIAL_CONFIG  SERIAL_8N2
+/* Pin used to reset the XBee at power-up because that appears to be
+   necessary.  */
+#define XBEE_RESET_PIN      51
 
 /* An XBee payload size is 84, or 66 if the message is encrypted.  (Otherwise
    the payload will be fragmented but let's stay in control.) */
 #define MAX_XBEE_PAYLOAD_SIZE        66
 #define MAX_XBEE_FRAME_SIZE          110
-/* XBee destination address for the report. */
+/* XBee destination address for the report; in this case the XBee coordinator. */
 #define XBEE_DESTINATION_ADDRESS_64  { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
 #define XBEE_DESTINATION_ADDRESS_16  { 0xff, 0xfe }
 
@@ -72,9 +79,9 @@
 #define LOWEST_FREQUENCY_REPORTED    10
 #define HIGHEST_FREQUENCY_REPORTED  150
 
-/* Make an LED blink on every successful report. */
+/* Make an LED blink on every successful report. The on-board LED may be used
+   but in this case it's pin 52. */
 #define REPORT_BLINK_ENABLED    1
-//#define REPORT_BLINK_LED_PIN  13
 #define REPORT_BLINK_LED_PIN   52
 
 /* Default threshold for reporting amplitudes. */
@@ -152,9 +159,9 @@ void start_sampling( )
   pmc_enable_periph_clk( TC3_IRQn );
   /* Configure the channel. */
   TC_Configure( TC1, 0, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4 );
-  uint32_t rc = VARIANT_MCK/128/SAMPLE_RATE;
+  uint32_t rc = VARIANT_MCK / 128 / SAMPLE_RATE;
   /* Setup the timer. */
-  TC_SetRA( TC1, 0, rc/2 );
+  TC_SetRA( TC1, 0, rc / 2 );
   TC_SetRC( TC1, 0, rc );
   TC_Start( TC1, 0 );
   TC1->TC_CHANNEL[ 0 ].TC_IER = TC_IER_CPCS;
@@ -216,8 +223,10 @@ void sampling_interrupt( )
 #elif defined( ARDUINO_SAM_DUE )
   const int adc_resolution = 4096;
 #endif
+
   /* Read the geodata sample from the analog input. */
-  short geodata_sample = analogRead( GEODATA_PIN ) - ( adc_resolution >> 1 );
+  short geodata_sample = analogRead( GEODATA_PIN )
+                         - ( adc_resolution >> 1 ) - GEODATA_DC_OFFSET;
   /* To apply a Hamming window, use the following code. */
   /*
   const double alpha = 0.54;
@@ -233,21 +242,21 @@ void sampling_interrupt( )
   /* Scale the sample and apply the window weight. */
   double window = rectangular_window;
   //const double scale = 8192.0 / adc_resolution;
-  //const double scale = 32768.0 / adc_resolution;
-  const double scale = 65536.0 / adc_resolution;
-  geodata_sample = (short)( (double)geodata_sample * window * scale );
+  const int scale = 32768.0 / adc_resolution;
+  //const double scale = 65536.0 / adc_resolution;
+  geodata_sample = (short)( (double)geodata_sample * (double)scale );
   geodata_samples[ isr_current_geodata_index++ ] = geodata_sample;
 
   /* Raise a semaphor if the buffer is full and tell which buffer
      is active. */
-  if( isr_current_geodata_index == NUMBER_OF_GEODATA_SAMPLES )
+  if ( isr_current_geodata_index == NUMBER_OF_GEODATA_SAMPLES )
   {
     /* The lower buffer has been filled. */
     geodata_samples_real     = &geodata_samples[ 0 ];
     isr_hamming_window_index = 0;
     geodata_buffer_full      = true;
   }
-  else if( isr_current_geodata_index == NUMBER_OF_GEODATA_SAMPLES * 2 )
+  else if ( isr_current_geodata_index == NUMBER_OF_GEODATA_SAMPLES * 2 )
   {
     /* The upper buffer has been filled. */
     geodata_samples_real      = &geodata_samples[ NUMBER_OF_GEODATA_SAMPLES ];
@@ -272,21 +281,21 @@ void report_blink( bool enabled )
   static unsigned long timestamp;
   static bool          led_on = false;
 
-  if( enabled == true )
+  if ( enabled == true )
   {
     /* Turn on the LED and start a timer if a report was created. */
-    if( report_was_created == true )
+    if ( report_was_created == true )
     {
       report_was_created = false;
-	  /* Make it a rather short blink of just 75 ms. */
+      /* Make it a rather short blink of just 75 ms. */
       timestamp = millis( ) + 75;
       digitalWrite( REPORT_BLINK_LED_PIN, HIGH );
       led_on = true;
     }
     /* Turn off the LED once the timer expires. */
-    if( led_on == true )
+    if ( led_on == true )
     {
-      if( millis( ) > timestamp )
+      if ( millis( ) > timestamp )
       {
         digitalWrite( REPORT_BLINK_LED_PIN, LOW );
         led_on = false;
@@ -307,7 +316,7 @@ void report_blink( bool enabled )
 double compute_amplitude( double real, double imaginary )
 {
   double amplitude = sqrt( real * real + imaginary * imaginary );
-  return( amplitude );
+  return ( amplitude );
 }
 
 
@@ -322,11 +331,11 @@ double compute_amplitude( double real, double imaginary )
  */
 void swap( int first, int second, short *real, short *imaginary )
 {
-  short temp_r = real[ first ];                
+  short temp_r = real[ first ];
   real[ first ] = real[ second ];
   real[ second ] = temp_r;
 
-  short temp_i = imaginary[ first ];                
+  short temp_i = imaginary[ first ];
   imaginary[ first ] = imaginary[ second ];
   imaginary[ second ] = temp_i;
 }
@@ -341,7 +350,7 @@ void swap( int first, int second, short *real, short *imaginary )
  * @param [in] length Length of the array.
  */
 void bit_reverse_complex( short *real, short *imag, int length )
-{    
+{
   int N = length;
 
   int halfn  = N >> 1;
@@ -352,12 +361,12 @@ void bit_reverse_complex( short *real, short *imag, int length )
   unsigned int rev     = 1;
 
   /* Start of bit-reversed permutation loop, N/4 iterations. */
-  for( int i = quartn; i; i-- )
+  for ( int i = quartn; i; i-- )
   {
     /* Gray code generator for even values. */
     unsigned int nodd = ~i;                  // counting ones is easier
     int zeros;
-    for( zeros = 0; nodd & 1; zeros++ )
+    for ( zeros = 0; nodd & 1; zeros++ )
     {
       nodd >>= 1;   // find trailing zeros in i
     }
@@ -365,18 +374,18 @@ void bit_reverse_complex( short *real, short *imag, int length )
     rev     ^= quartn >> zeros; // toggle one bit of rev
 
     /* Swap even and ~even conditionally. */
-    if( forward < rev )
+    if ( forward < rev )
     {
       swap( forward, rev, real, imag );
       nodd = nmin1 ^ forward; // compute the bitwise negations
-      unsigned int noddrev = nmin1 ^ rev;        
+      unsigned int noddrev = nmin1 ^ rev;
       swap( nodd, noddrev, real, imag ); // swap bitwise-negated pairs
     }
 
     nodd = forward ^ 1;    // compute the odd values from the even
     unsigned int noddrev = rev ^ halfn;
     swap( nodd, noddrev, real, imag );  // swap odd unconditionally
-  }    
+  }
 }
 
 
@@ -390,8 +399,10 @@ void bit_reverse_complex( short *real, short *imag, int length )
  */
 inline short q15_mul16( short a, short b )
 {
-  long product = a * b;
-  return( (short)( ( product >> 15 ) & 0x0000ffff ) );
+  // Perform a 32-bit x 32-bit -> 32-bit integer multiplication.
+  int32_t product = (int32_t)a * (int32_t)b;
+  // Convert to q.15 fractional.
+  return ( (short)( ( product >> 15 ) & 0x0000ffff ) );
 }
 
 
@@ -441,7 +452,7 @@ inline void complex_mul( short *res_r, short *res_i,
  * @param [in,out] data_real Array of real components of complex input/output.
  * @param [in,out] data_imag Array of imaginary components of complex
  *        input/output.
- */ 
+ */
 void fft_radix2_512( short *data_real, short *data_imag )
 {
   const int length = 512;
@@ -450,9 +461,9 @@ void fft_radix2_512( short *data_real, short *data_imag )
   int wingspan         = length / 2;
 
   /* Divide and conquer. */
-  for( int stage = 1; stage < length; )
+  for ( int stage = 1; stage < length; )
   {
-    for( int group = 0; group < stage; group++ )
+    for ( int group = 0; group < stage; group++ )
     {
       /* Read the twiddle factors for the curent group. */
       short WR = pgm_read_word_near( twiddle_real + group );
@@ -463,7 +474,7 @@ void fft_radix2_512( short *data_real, short *data_imag )
       int upper = lower + pairs_per_group;
 
       /* Compute all the butterflies in the current group. */
-      for( int butterfly = lower; butterfly < upper; butterfly++ )
+      for ( int butterfly = lower; butterfly < upper; butterfly++ )
       {
         /* Compute one FFT butterfly. */
         short temp_r, temp_i;
@@ -514,7 +525,7 @@ void transmit_xbee_payload( const unsigned char *payload,
   xbee_frame[ pos++ ] = 0x10;
   /* Setup destination address and transmit options. */
   xbee_frame[ pos++ ] = frame_id;
-  for( int i = 0; i < 8; i++ )
+  for ( int i = 0; i < 8; i++ )
   {
     xbee_frame[ pos++ ] = address_64[ i ];
   }
@@ -531,12 +542,12 @@ void transmit_xbee_payload( const unsigned char *payload,
 
   /* Compute the checksum for the payload header. */
   unsigned char checksum = 0x00;
-  for( int i = 3; i < header_size; i++ )
+  for ( int i = 3; i < header_size; i++ )
   {
     checksum += xbee_frame[ i ];
   }
   /* Compute the checksum for the payload. */
-  for( int i = 0; i < payload_size; i++ )
+  for ( int i = 0; i < payload_size; i++ )
   {
     checksum += payload[ i ];
   }
@@ -547,7 +558,7 @@ void transmit_xbee_payload( const unsigned char *payload,
 
   /* Advance to the next XBee frame. */
   frame_id = frame_id + 1;
-  if( frame_id == 0 )
+  if ( frame_id == 0 )
   {
     frame_id = 1;
   }
@@ -568,7 +579,7 @@ int append_8_bits( unsigned char *buffer, unsigned char value, int bitpos )
   /* Compute the byte position to insert the value. */
   int bytepos = bitpos >> 3;
   /* If byte-aligned, just copy the byte. */
-  if( bitpos == bytepos << 3 )
+  if ( bitpos == bytepos << 3 )
   {
     buffer[ bytepos ] = value;
   }
@@ -577,9 +588,9 @@ int append_8_bits( unsigned char *buffer, unsigned char value, int bitpos )
     unsigned char upper_nibble = ( value >> 4 ) & 0x0f;
     unsigned char lower_nibble = value << 4;
     buffer[ bytepos ]     |= upper_nibble;
-	buffer[ bytepos + 1 ]  = lower_nibble;
+    buffer[ bytepos + 1 ]  = lower_nibble;
   }
-  return( bitpos + 8 );
+  return ( bitpos + 8 );
 }
 
 
@@ -597,10 +608,10 @@ int append_12_bits( unsigned char *buffer, unsigned short value, int bitpos )
   /* Compute the byte position to insert the value. */
   int bytepos = bitpos >> 3;
   /* If byte-aligned, copy the first byte and append the remaining nibble. */
-  if( bitpos == bytepos << 3 )
+  if ( bitpos == bytepos << 3 )
   {
     unsigned char first_byte    = (unsigned char)( ( value >> 4 ) & 0x00ff );
-    unsigned char second_nibble = (unsigned char)( value & 0x0f ) << 4; 
+    unsigned char second_nibble = (unsigned char)( value & 0x0f ) << 4;
     buffer[ bytepos     ] = first_byte;
     buffer[ bytepos + 1 ] = second_nibble;
   }
@@ -612,7 +623,7 @@ int append_12_bits( unsigned char *buffer, unsigned short value, int bitpos )
     buffer[ bytepos + 1 ]  = second_byte;
   }
 
-  return( bitpos + 12 );
+  return ( bitpos + 12 );
 }
 
 
@@ -649,13 +660,12 @@ void report( const short *freq_real, const short *freq_imag, int length,
 
   /* Walk through the frequency components array and report any frequency
      whose amplitude is above the specified threshold. */
-  const int lower_frequency_bin =
-    LOWEST_FREQUENCY_REPORTED * NUMBER_OF_GEODATA_SAMPLES / SAMPLE_RATE;
-  const int upper_frequency_bin =
-    HIGHEST_FREQUENCY_REPORTED * NUMBER_OF_GEODATA_SAMPLES / SAMPLE_RATE;
-  for( int frequency_bin = lower_frequency_bin;
-       frequency_bin <= upper_frequency_bin;
-       frequency_bin++ )
+  const float frequency_ratio = (float)NUMBER_OF_GEODATA_SAMPLES / (float)SAMPLE_RATE;
+  const int lower_frequency_bin = (int)( LOWEST_FREQUENCY_REPORTED * frequency_ratio );
+  const float upper_frequency_bin = (int)( HIGHEST_FREQUENCY_REPORTED * frequency_ratio );
+  for ( int frequency_bin = lower_frequency_bin;
+        frequency_bin <= upper_frequency_bin;
+        frequency_bin++ )
   {
     /* Compute the amplitude. */
     double real = (double)freq_real[ frequency_bin ] / 32768.0;
@@ -663,10 +673,10 @@ void report( const short *freq_real, const short *freq_imag, int length,
     double amplitude = sqrt( real * real + imag * imag );
     /* Report the frequency bin and the amplitude if the threshold is
        exceeded. */
-    if( amplitude >= threshold )
+    if ( amplitude >= threshold )
     {
       /* Comma-separate the numbers. */
-      if( first_entry == true )
+      if ( first_entry == true )
       {
         first_entry = false;
       }
@@ -696,7 +706,7 @@ void report( const short *freq_real, const short *freq_imag, int length,
                                              binary_report_bitpos );
       pairs_in_packet = pairs_in_packet + 1;
       /* Transmit the packet if the payload size is about to exceed maximum. */
-      if( pairs_in_packet > max_pairs_per_packet )
+      if ( pairs_in_packet > max_pairs_per_packet )
       {
         transmit_xbee_payload( binary_report, binary_report_bitpos >> 3,
                                xbee_address_64, xbee_address_16 );
@@ -710,7 +720,7 @@ void report( const short *freq_real, const short *freq_imag, int length,
   }
   /* Terminate the report if any output was reported and indicate to the
      report LED blinking that the report was submitted. */
-  if( first_entry == false )
+  if ( first_entry == false )
   {
 #if HUMAN_READABLE_REPORT_ENABLED == 1
     SERIAL_PORT.println( "" );
@@ -741,7 +751,7 @@ double read_amplitude_threshold_from_eeprom( )
 {
   double        threshold;
   unsigned char *threshold_bytes = (unsigned char*)&threshold;
-  for( int i = 0; i < sizeof( double ); i++ )
+  for ( int i = 0; i < sizeof( double ); i++ )
   {
 
 #if defined( ARDUINO_AVR_MEGA2560 )
@@ -751,11 +761,11 @@ double read_amplitude_threshold_from_eeprom( )
 #endif
     threshold_bytes[ i ] = value;
   }
-  if( threshold == 0.0 )
+  if ( threshold == 0.0 )
   {
     threshold = DEFAULT_AMPLITUDE_THRESHOLD;
   }
-  return( threshold );
+  return ( threshold );
 }
 
 
@@ -769,7 +779,7 @@ void save_amplitude_threshold_to_eeprom( double threshold )
 {
 #if defined( ARDUINO_AVR_MEGA2560 )
   unsigned char *threshold_bytes = (unsigned char*)&threshold;
-  for( int i = 0; i < sizeof( double ); i++ )
+  for ( int i = 0; i < sizeof( double ); i++ )
   {
     byte value = threshold_bytes[ i ];
     EEPROM.write( AMPLITUDE_THRESHOLD_EEPROM_ADDRESS + i, value );
@@ -799,15 +809,15 @@ int receive_xbee_frame( unsigned char *frame,
   static unsigned char checksum;
 
   /* Get a byte from the serial port, if any. */
-  if( XBEE_SERIAL_PORT.available( ) > 0 )
+  if ( XBEE_SERIAL_PORT.available( ) > 0 )
   {
     char incoming_byte = XBEE_SERIAL_PORT.read( );
-	/* Wait for a frame delimiter. */
-    if( position == 0 )
+    /* Wait for a frame delimiter. */
+    if ( position == 0 )
     {
-      if( incoming_byte != 0x7e )
+      if ( incoming_byte != 0x7e )
       {
-        return( 0 );
+        return ( 0 );
       }
       reported_frame_size = 3;
       checksum = 0xff;
@@ -818,43 +828,43 @@ int receive_xbee_frame( unsigned char *frame,
 
     /* If the maximum frame size is exceeded, reset the frame and report
        error. */
-    if( position == MAX_XBEE_FRAME_SIZE )
+    if ( position == MAX_XBEE_FRAME_SIZE )
     {
       position = 0;
-      return( -1 );
+      return ( -1 );
     }
 
     /* Read the reported size. */
-    else if( position == 2 )
+    else if ( position == 2 )
     {
       reported_frame_size = frame[ 0 ] << 8 | frame[ 1 ];
     }
-    else if( position > 2 )
+    else if ( position > 2 )
     {
       checksum += incoming_byte;
     }
 
     /* If the entire frame has been received, the last byte was the
        checksum. */
-    if( position == reported_frame_size )
+    if ( position == reported_frame_size )
     {
       /* Reset the frame and report a checksum error if the checksum is
          invalid. */
-      if( incoming_byte != checksum )
+      if ( incoming_byte != checksum )
       {
         position = 0;
-        return( -1 );
+        return ( -1 );
       }
       /* The frame is good so return the reported frame size plus the size
          bytes and the checksum. */
       else
       {
-        return( reported_frame_size + 3 );
+        return ( reported_frame_size + 3 );
       }
     }
   }
 
-  return( 0 );
+  return ( 0 );
 }
 
 
@@ -879,23 +889,23 @@ double get_new_threshold_xbee_mode( )
   /* Receive an XBee frame, if any. */
   int frame_size = receive_xbee_frame( xbee_frame,
                                        source_address_64, source_address_16 );
-  if( frame_size > 14 )
+  if ( frame_size > 14 )
   {
     /* Verify that it's a receive data frame. */
-    if( xbee_frame[ 2 ] == 0x90 )
+    if ( xbee_frame[ 2 ] == 0x90 )
     {
       /* Zero-terminate the frame content because it's a string. */
       xbee_frame[ frame_size - 1 ] = '\0';
       /* Read the threshold value. */
       double new_threshold = atof( (const char*)&xbee_frame[ 14 ] );
       /* Return the new threshold value if it is valid. */
-      if( new_threshold >= 0.0 && new_threshold < 1.0 )
+      if ( new_threshold >= 0.0 && new_threshold < 1.0 )
       {
-        return( new_threshold );
+        return ( new_threshold );
       }
     }
   }
-  return( -1.0 );
+  return ( -1.0 );
 }
 
 
@@ -905,7 +915,7 @@ double get_new_threshold_xbee_mode( )
  */
 void flush_serial_input( )
 {
-  while( SERIAL_PORT.available( ) > 0 )
+  while ( SERIAL_PORT.available( ) > 0 )
   {
     SERIAL_PORT.read( );
   }
@@ -930,7 +940,7 @@ void flush_serial_input( )
  */
 double get_new_threshold( )
 {
-#if XBEE_ENABLED == 0
+#if HUMAN_READABLE_REPORT_ENABLED != 0
   static char          threshold_string[ 20 ];
   static int           threshold_string_pos = 0;
   static unsigned long timestamp;
@@ -938,7 +948,7 @@ double get_new_threshold( )
   const unsigned long  timeout = 250;
 
   /* Timeout if characters are not being received swiftly enough. */
-  if( ( threshold_string_pos > 0 ) && ( timestamp + timeout < millis( ) ) )
+  if ( ( threshold_string_pos > 0 ) && ( timestamp + timeout < millis( ) ) )
   {
     SERIAL_PORT.println( "E:TIMEOUT" );
     flush_serial_input( );
@@ -946,26 +956,26 @@ double get_new_threshold( )
   }
 
   /* Read the next byte from the serial port, if any. */
-  else if( SERIAL_PORT.available( ) > 0 )
+  else if ( SERIAL_PORT.available( ) > 0 )
   {
     /* The first byte should start a timeout counter.  The entire string
        is discarded if the timer expires before the value has been
        submitted to the device. */
-    if( threshold_string_pos == 0 )
+    if ( threshold_string_pos == 0 )
     {
       timestamp = millis( );
     }
 
-    if( threshold_string_pos < sizeof( threshold_string ) - 1 )
+    if ( threshold_string_pos < sizeof( threshold_string ) - 1 )
     {
       char incoming_byte = SERIAL_PORT.read( );
       /* Attempt to parse the new threshold value once a newline is received. */
-      if( incoming_byte == '\r' || incoming_byte == '\n' )
+      if ( incoming_byte == '\r' || incoming_byte == '\n' )
       {
         threshold_string[ threshold_string_pos ] = '\0';
         double threshold = atof( threshold_string );
         /* Only threshold values between 0.0 and 1.0 are allowed. */
-        if( threshold < 0.0 || threshold >= 1.0 )
+        if ( threshold < 0.0 || threshold >= 1.0 )
         {
           threshold = -1.0;
           SERIAL_PORT.println( "E:OVERFLOW" );
@@ -982,8 +992,8 @@ double get_new_threshold( )
       }
       /* Add the byte to the threshold string if it's a valid numerical
          character. */
-      else if(    ( ( incoming_byte >= '0' ) && ( incoming_byte <= '9' ) )
-               || ( incoming_byte == '.' ) )
+      else if (    ( ( incoming_byte >= '0' ) && ( incoming_byte <= '9' ) )
+                   || ( incoming_byte == '.' ) )
       {
         threshold_string[ threshold_string_pos++ ] = incoming_byte;
       }
@@ -1003,11 +1013,13 @@ double get_new_threshold( )
       threshold_string_pos = 0;
     }
   }
-  return( -1.0 );
-
-#else /* XBee enabled */
-  return( get_new_threshold_xbee_mode( ) );
 #endif
+
+#if XBEE_ENABLED
+  return ( get_new_threshold_xbee_mode( ) );
+#endif
+
+  return ( -1.0 );
 }
 
 
@@ -1031,6 +1043,7 @@ void setup()
 #endif
 
   /* Setup the analog input. */
+  analogReference( DEFAULT );
   pinMode( GEODATA_PIN, INPUT );
   /* Setup the geophone data sampling buffers and sampling interrupt. */
   start_sampling( );
@@ -1041,11 +1054,19 @@ void setup()
 
   /* Configure the report LED if enabled. */
   report_was_created = false;
-  if( REPORT_BLINK_ENABLED )
+  if ( REPORT_BLINK_ENABLED )
   {
     pinMode( REPORT_BLINK_LED_PIN, OUTPUT );
     digitalWrite( REPORT_BLINK_LED_PIN, LOW );
   }
+
+#if XBEE_ENABLED != 0
+  /* Reset the XBee because for some reason that's necessary. */
+  pinMode( XBEE_RESET_PIN, OUTPUT );
+  digitalWrite( XBEE_RESET_PIN, LOW );
+  delay( 10 );
+  digitalWrite( XBEE_RESET_PIN, HIGH );
+#endif
 }
 
 
@@ -1059,22 +1080,20 @@ void setup()
 void loop()
 {
   /* Analyze the geophone data once it's available. */
-  if( geodata_buffer_full == true )
+  if ( geodata_buffer_full == true )
   {
-    geodata_buffer_full = false;
-
     /* Set the imaginary data values to 0 as this is a real-valued signal. */
     unsigned long *geodata_samples_imag_l = (unsigned long *)&geodata_samples_imag[ 0 ];
-    for( int i = 0; i < NUMBER_OF_GEODATA_SAMPLES / 2; i++ )
+    for( int i = 0; i < NUMBER_OF_GEODATA_SAMPLES >> 1; i++ )
     {
       geodata_samples_imag_l[ i ] = 0ul;
     }
+
     /* Compute the Fourier transform in-place. */
     fft_radix2_512( geodata_samples_real, &geodata_samples_imag[ 0 ] );
     bit_reverse_complex( geodata_samples_real, &geodata_samples_imag[ 0 ],
                          NUMBER_OF_GEODATA_SAMPLES );
-
-    /* Compute the amplitudes and report them in the same run.  Since
+     /* Compute the amplitudes and report them in the same run.  Since
        the input data is real, the last half of the Fourier transform is
        is the complex conjugate of the first half and thus redundant.
        (This is why we bother to bit-reverse the Fourier-transformed
@@ -1083,12 +1102,23 @@ void loop()
        to pick the non-redundant values from the array anyway.) */
     report( geodata_samples_real, &geodata_samples_imag[ 0 ],
             NUMBER_OF_GEODATA_SAMPLES / 2 + 1, amplitude_threshold );
+
+/*
+    for( int i = 0; i < NUMBER_OF_GEODATA_SAMPLES - 1; i++ )
+    {
+      Serial.print( geodata_samples_real[ i ] );
+      Serial.print( "," );
+    }
+    Serial.println( geodata_samples_real[ NUMBER_OF_GEODATA_SAMPLES - 1 ] );
+*/
+
+    geodata_buffer_full = false;
   }
 
   /* Read any new threshold value that may be provided.  Update the threshold
      and write it to EEPROM if the value is valid. */
   double threshold = get_new_threshold( );
-  if( threshold > 0.0 )
+  if ( threshold > 0.0 )
   {
     save_amplitude_threshold_to_eeprom( threshold );
     amplitude_threshold = threshold;
