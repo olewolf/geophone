@@ -625,6 +625,63 @@ int append_12_bits( unsigned char *buffer, unsigned short value, int bitpos )
 
 
 /**
+ * Convert a floating-point value to a string.
+ *
+ * @param [in] value Floating-point value.
+ * @param [out] string Destination string.
+ * @param [in] decimals Number of digits after the decimal point.
+ */
+void ftoa( double value, char *string, int decimals )
+{
+  int integer     = (int)value;
+  double fraction = value - (double)integer;
+
+  double power = 1.0;
+  for( int i = 0; i < decimals; i++ )
+  {
+    power = power * 10;
+  }
+  fraction = fraction * power + 0.5;
+  int int_fraction = (int)fraction;
+  
+  sprintf( string, "%d.%d", integer, int_fraction );
+}
+
+
+
+/**
+ * Write a frequency/amplitude pair to the serial port and calculate the checksum
+ * for the string.
+ *
+ * @param [in] frequency Frequency bin.
+ * @param [in] amplitude Amplitude for this frequency component.
+ * @return Checksum of the "frequency,amplitude" string.
+ */
+unsigned char report_pair( short frequency, double amplitude )
+{
+  char output_string[ 20 ];
+  unsigned char checksum = 0;
+
+  /* Print "frequency,". */
+  sprintf( output_string, "%d,", frequency );
+  for( int i = 0; i < strlen( output_string ); i++ )
+  {
+    checksum = checksum + output_string[ i ];
+  }
+  SERIAL_PORT.print( output_string );
+
+  /* Print "amplitude" with no more than four decimal places. */
+  ftoa( amplitude, output_string, 4 );
+  for( int i = 0; i < strlen( output_string ); i++ )
+  {
+    checksum = checksum + output_string[ i ];
+  }
+  SERIAL_PORT.print( output_string );
+
+  return( checksum );
+}
+
+/**
  * Print an array of amplitudes that are above the specified threshold.
  *
  * @param [in] freq_real Array of real components of the frequency bins.
@@ -635,7 +692,8 @@ int append_12_bits( unsigned char *buffer, unsigned short value, int bitpos )
 void report( const short *freq_real, const short *freq_imag, int length,
              double threshold )
 {
-  bool first_entry = true;
+  bool first_entry       = true;
+  unsigned char checksum = 0;
 
 #if XBEE_ENABLED != 0
   const unsigned char xbee_address_64[ ] = XBEE_DESTINATION_ADDRESS_64;
@@ -680,6 +738,7 @@ void report( const short *freq_real, const short *freq_imag, int length,
       {
 #if HUMAN_READABLE_REPORT_ENABLED == 1
         SERIAL_PORT.print( "," );
+        checksum = checksum + ',';
 #endif
       }
       /* Print the frequency bin and its amplitude. */
@@ -687,9 +746,7 @@ void report( const short *freq_real, const short *freq_imag, int length,
         (double)SAMPLE_RATE / (double)NUMBER_OF_GEODATA_SAMPLES
         * (double)frequency_bin + 0.5;
 #if HUMAN_READABLE_REPORT_ENABLED == 1
-      SERIAL_PORT.print( (short)frequency );
-      SERIAL_PORT.print( "," );
-      SERIAL_PORT.print( amplitude, 4 );
+      checksum = checksum + report_pair( (short)frequency, amplitude );
 #endif
 
 #if XBEE_ENABLED != 0
@@ -698,7 +755,7 @@ void report( const short *freq_real, const short *freq_imag, int length,
                                             (unsigned char)frequency,
                                             binary_report_bitpos );
       binary_report_bitpos = append_12_bits( binary_report,
-                                             (short)( amplitude * 4096.0),
+                                             (short)( amplitude * 4096.0 + 0.5),
                                              binary_report_bitpos );
       pairs_in_packet = pairs_in_packet + 1;
       /* Transmit the packet if the payload size is about to exceed maximum. */
@@ -721,7 +778,8 @@ void report( const short *freq_real, const short *freq_imag, int length,
   if ( first_entry == false )
   {
 #if HUMAN_READABLE_REPORT_ENABLED == 1
-    SERIAL_PORT.println( "" );
+    SERIAL_PORT.print( "," );
+    SERIAL_PORT.println( checksum );
 #endif
 #if XBEE_ENABLED != 0
     /* Add a frequency component with the value 0 to indicate that this is
