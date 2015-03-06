@@ -129,10 +129,10 @@ foreach my $log_entry( @log )
 		# Otherwise, assume there's an entry per second (beginning at
 		# time = 0).
 		my $test = $log_entry;
-#		$test =~ /([a-zA-Z]{3} [a-zA-Z]{3} [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]{4}) (.*)/;
-
-#		$test =~ /([a-zA-Z]{3} [a-zA-Z]{3} [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [a-zA-Z]{3} [0-9]{4}) (.*)/;
+		# Format: Thu Feb 26 20:31:14 2015
 		$test =~ /([a-zA-Z]{3} [a-zA-Z]{3} [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]{4}) (.*)/;
+		# Format: Thu Feb 26 20:31:14 UTC 2015
+#		$test =~ /([a-zA-Z]{3} [a-zA-Z]{3} [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [A-Z]{3} [0-9]{4}) (.*)/;
 		my( $log_timestamp, $measurements ) = ( $1, $2 );
 		if( $log_timestamp eq "" )
 		{
