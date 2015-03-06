@@ -3,7 +3,7 @@
 # Create a heatmap based on the frequencies and amplitudes versus
 # time read from a log file specified as argument.
 #
-# USAGE:  createheatmap.pl <logfile>
+# USAGE:  createheatmap.pl <logfile> <image-file>
 
 use strict;
 use Image::Magick;
@@ -11,12 +11,24 @@ use Time::Piece;
 use Date::Parse;
 #use Data::Dumper qw(Dumper);
 
+sub usage
+{
+	print "USAGE:  createheatmap.pl <logfile> <image-file>\n";
+	exit;
+}
+
+
 my $logfile = shift;
 if( $logfile eq "" )
 {
-	print "USAGE:  createheatmap.pl <logfile>\n";
-	exit;
+	usage;
 }
+my $image_file = shift;
+if( $image_file eq "" )
+{
+	usage;
+}
+
 
 # Set the desired colormap among those listed in %color_maps.
 my $desired_colormap = "spectral";
@@ -365,4 +377,4 @@ $coordinate_system->Annotate( font => "$font", text => "Frequency",
 							  rotate => "-90" );
 
 # Write the heapmap image to disk.
-$coordinate_system->Write( filename => "heatmap.jpg", compression => "JPEG" );
+$coordinate_system->Write( filename => $image_file, compression => "JPEG" );
