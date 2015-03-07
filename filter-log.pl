@@ -27,7 +27,7 @@ foreach (@ARGV) {
 }
 
 # Read the two dates specified on the command line.
-$arguments =~ /([a-zA-Z]{3} [a-zA-Z]{3} [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]{4}) ([a-zA-Z]{3} [a-zA-Z]{3} [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]{4}).*/;
+$arguments =~ /([a-zA-Z]{3} [a-zA-Z]{3} {1,2}[0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]{4}) ([a-zA-Z]{3} [a-zA-Z]{3} {1,2}[0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]{4}).*/;
 my( $fromdate, $todate ) = ( $1, $2 );
 if( $fromdate eq "" )
 {
@@ -47,7 +47,7 @@ foreach my $log_entry( <STDIN> )
 	{
 		my $log_timestamp;
 		my $measurements;
-		my @test = $log_entry =~ /([a-zA-Z]{3} [a-zA-Z]{3} [0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]{4}) (.*)/;
+		my @test = $log_entry =~ /([a-zA-Z]{3} [a-zA-Z]{3} {1,2}[0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]{4}) (.*)/;
 		if( $#test == 1 )
 		{
 			$log_timestamp = $test[ 0 ];
