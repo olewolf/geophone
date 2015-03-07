@@ -276,7 +276,7 @@ for( my $report_index = 0; $report_index <= $entries; $report_index++ )
 
 
 # Blur the image slightly to make it easier on the eyes.
-$coordinate_system->AdaptiveBlur( radius => 3, sigma => 1.2 );
+$coordinate_system->AdaptiveBlur( radius => 3, sigma => 1.1 );
 
 # Plot axes.
 my $coord_origin_x = $x_margin_l;
