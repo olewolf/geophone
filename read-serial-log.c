@@ -141,8 +141,6 @@ static frame_t *read_frame( int serial )
 
 int main( int argc, char *argv[ ] )
 {
-//	FILE    *out_fhd = stdout;
-
 	if( argc != 2 )
 	{
 		fprintf( stderr, "USAGE: %s <serial port>\n", argv[ 0 ] );
@@ -186,7 +184,8 @@ int main( int argc, char *argv[ ] )
 
 	/* Make the output unbuffered. */
 	//setbuf( out_fhd, NULL );
-//	setvbuf( out_fhd, NULL, _IONBF, 0 );
+	FILE *out_fhd = stdout;
+	setvbuf( out_fhd, NULL, _IONBF, 0 );
 
 	while( 1 )
 	{
@@ -195,7 +194,7 @@ int main( int argc, char *argv[ ] )
 		if( frame != NULL )
 		{
 			printf( "%s\n", frame->frame );
-//			fflush( out_fhd );
+			fflush( out_fhd );
 
 			g_free( frame->frame );
 			g_free( frame );
