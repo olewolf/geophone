@@ -156,50 +156,52 @@ int main( int argc, char *argv[ ] )
 		{
 			fprintf( stderr, "Can't open serial port %s: ", argv[ 1 ] );
 			perror( "" );
-			exit( EXIT_FAILURE );
 		}
-
-		/* Set Baud Rate */
-		cfsetospeed( &tty, B115200 );
-		cfsetispeed( &tty, B115200 );
-
-		/* Setting other Port Stuff */
-		tty.c_cflag     &=  ~PARENB; 
-		tty.c_cflag     &=  ~CSTOPB;
-		tty.c_cflag     &=  ~CSIZE;
-		tty.c_cflag     |=  CS8;
-		tty.c_cflag     &=  ~CRTSCTS;
-		tty.c_cc[VMIN]   =  1;
-		tty.c_cc[VTIME]  =  5;
-		tty.c_cflag     |=  CREAD | CLOCAL;
-
-		/* Make raw */
-		cfmakeraw( &tty );
-
-		/* Flush port, then apply attributes */
-		tcflush( serial, TCIFLUSH );
-		if ( tcsetattr ( serial, TCSANOW, &tty ) != 0)
+		else
 		{
-			perror( "Can't set serial port attributes: " );
-			exit( EXIT_FAILURE );
-		}
+			/* Set Baud Rate */
+			cfsetospeed( &tty, B115200 );
+			cfsetispeed( &tty, B115200 );
 
-		/* Make the output unbuffered. */
-		//setbuf( out_fhd, NULL );
-		FILE *out_fhd = stdout;
-		setvbuf( out_fhd, NULL, _IONBF, 0 );
+			/* Setting other Port Stuff */
+			tty.c_cflag     &=  ~PARENB; 
+			tty.c_cflag     &=  ~CSTOPB;
+			tty.c_cflag     &=  ~CSIZE;
+			tty.c_cflag     |=  CS8;
+			tty.c_cflag     &=  ~CRTSCTS;
+			tty.c_cc[VMIN]   =  1;
+			tty.c_cc[VTIME]  =  5;
+			tty.c_cflag     |=  CREAD | CLOCAL;
 
-		while( 1 )
-		{
-			frame_t *frame = read_frame( serial );
+			/* Make raw */
+			cfmakeraw( &tty );
 
-			if( frame != NULL )
+			/* Flush port, then apply attributes */
+			tcflush( serial, TCIFLUSH );
+			if ( tcsetattr ( serial, TCSANOW, &tty ) != 0)
 			{
-				printf( "%s\n", frame->frame );
-				fflush( out_fhd );
+				perror( "Can't set serial port attributes: " );
+			}
+			else
+			{
+				/* Make the output unbuffered. */
+				//setbuf( out_fhd, NULL );
+				FILE *out_fhd = stdout;
+				setvbuf( out_fhd, NULL, _IONBF, 0 );
 
-				g_free( frame->frame );
-				g_free( frame );
+				while( 1 )
+				{
+					frame_t *frame = read_frame( serial );
+
+					if( frame != NULL )
+					{
+						printf( "%s\n", frame->frame );
+						fflush( out_fhd );
+
+						g_free( frame->frame );
+						g_free( frame );
+					}
+				}
 			}
 		}
 
