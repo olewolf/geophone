@@ -147,8 +147,8 @@ int main( int argc, char *argv[ ] )
 		exit( EXIT_FAILURE );
 	}
 
-	while( 1 )
-	{
+//	while( 1 )
+//	{
 		int serial = open( argv[ 1 ], O_RDWR| O_NOCTTY );
 		struct termios tty;
 		bzero( &tty, sizeof( tty ) );
@@ -156,6 +156,7 @@ int main( int argc, char *argv[ ] )
 		{
 			fprintf( stderr, "Can't open serial port %s: ", argv[ 1 ] );
 			perror( "" );
+			exit( EXIT_FAILURE );
 		}
 		else
 		{
@@ -181,6 +182,7 @@ int main( int argc, char *argv[ ] )
 			if ( tcsetattr ( serial, TCSANOW, &tty ) != 0)
 			{
 				perror( "Can't set serial port attributes: " );
+				exit( EXIT_FAILURE );
 			}
 			else
 			{
@@ -203,13 +205,13 @@ int main( int argc, char *argv[ ] )
 					}
 				}
 			}
-		}
+//		}
 
 		/* Some error must have occurred.  Close the serial port, wait
 		   a while, and start over. */
-		close( serial );
-		sleep( 1 );
+//		close( serial );
+//		sleep( 1 );
 	}
 
-	exit( EXIT_SUCCESS );
+	exit( EXIT_FAILURE );
 }
