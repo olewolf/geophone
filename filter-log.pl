@@ -10,7 +10,7 @@
 
 use strict;
 use Time::Piece;
-use Date::Parse;
+#use Date::Parse;
 use Data::Dumper qw(Dumper);
 
 
@@ -56,7 +56,10 @@ foreach my $log_entry( <STDIN> )
 			if( $log_timestamp ne "" )
 			{
 				# Convert the text timestamp to UNIX time.
-				$log_timestamp = str2time( $log_timestamp );
+#				$log_timestamp = str2time( $log_timestamp );
+				my $time_piece = Time::Piece->strptime( $log_timestamp, "%c" );
+				$log_timestamp = $time_piece->epoch;
+				
 				if( ( $from_timestamp <= $log_timestamp ) && ( $log_timestamp <= $to_timestamp  ) )
 				{
 					print "$log_entry\n";
