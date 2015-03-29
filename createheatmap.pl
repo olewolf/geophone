@@ -8,7 +8,7 @@
 use strict;
 use Image::Magick;
 use Time::Piece;
-use Date::Parse;
+#use Date::Parse;
 #use Data::Dumper qw(Dumper);
 
 sub usage
@@ -155,7 +155,10 @@ foreach my $log_entry( @log )
 		{
 			# Convert the text timestamp to UNIX time.
 			$has_real_timestamps = 1;
-			$log_timestamp = str2time( $log_timestamp );
+#			$log_timestamp = str2time( $log_timestamp );
+#			my $time_piece = Time::Piece->strptime( $log_timestamp, "%a %b %d %H:%M:S %Y" );
+			my $time_piece = Time::Piece->strptime( $log_timestamp, "%c" );
+			$log_timestamp = $time_piece->epoch;
 		}
 		$report_timestamps[ $report_index ] = $log_timestamp;
 		if( $log_timestamp < $min_timestamp )
