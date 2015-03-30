@@ -8,7 +8,6 @@
 use strict;
 use Image::Magick;
 use Time::Piece;
-#use Date::Parse;
 #use Data::Dumper qw(Dumper);
 
 sub usage
@@ -155,7 +154,6 @@ foreach my $log_entry( @log )
 		{
 			# Convert the text timestamp to UNIX time.
 			$has_real_timestamps = 1;
-#			$log_timestamp = str2time( $log_timestamp );
 #			my $time_piece = Time::Piece->strptime( $log_timestamp, "%a %b %d %H:%M:S %Y" );
 			my $time_piece = Time::Piece->strptime( $log_timestamp, "%c" );
 			$log_timestamp = $time_piece->epoch;
@@ -210,6 +208,7 @@ for( my $i = 0; $i < $heatmap_length; $i++ )
 	my $color_name = "rgb(" . join( ",", @color ) . ")";
 	@color_map[ $i ] = $color_name;
 }
+undef $heatmap;
 
 # Create a coordinate system image.
 my $coordinate_system = Image::Magick->new( );
@@ -247,8 +246,17 @@ sub translate_x
 
 # Plot the dots, colored according to the color map.
 my $entries = $#report_timestamps;
+my $report_period = 0;
+my $report_frequency = $entries / 20;
 for( my $report_index = 0; $report_index <= $entries; $report_index++ )
 {
+	$report_period = $report_period + 1;
+	if( $report_period >= $report_frequency )
+	{
+		$report_period = 0;
+		printf( "%d%%\r", 100 * $report_index / $entries );
+	}
+
 	my $timestamp   = $report_timestamps[ $report_index ];
 	my @frequencies = split /,/, $report_frequencies[ $report_index ];
 	my @amplitudes  = split /,/, $report_amplitudes[ $report_index ];

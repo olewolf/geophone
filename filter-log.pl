@@ -11,7 +11,7 @@
 use strict;
 use Time::Piece;
 #use Date::Parse;
-use Data::Dumper qw(Dumper);
+#use Data::Dumper qw(Dumper);
 
 
 sub usage
@@ -35,8 +35,10 @@ if( $fromdate eq "" )
 }
 
 # Convert timestamps to UNIX time.
-my $from_timestamp = str2time( $fromdate );
-my $to_timestamp   = str2time( $todate );
+my $time_piece = Time::Piece->strptime( $fromdate, "%c" );
+$time_piece = Time::Piece->strptime( $todate, "%c" );
+my $from_timestamp = $time_piece->epoch;
+my $to_timestamp   = $time_piece->epoch;
 
 foreach my $log_entry( <STDIN> )
 {
@@ -57,7 +59,7 @@ foreach my $log_entry( <STDIN> )
 			{
 				# Convert the text timestamp to UNIX time.
 #				$log_timestamp = str2time( $log_timestamp );
-				my $time_piece = Time::Piece->strptime( $log_timestamp, "%c" );
+				$time_piece = Time::Piece->strptime( $log_timestamp, "%c" );
 				$log_timestamp = $time_piece->epoch;
 				
 				if( ( $from_timestamp <= $log_timestamp ) && ( $log_timestamp <= $to_timestamp  ) )
