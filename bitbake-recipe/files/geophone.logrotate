@@ -1,0 +1,13 @@
+/var/lib/geophone/geophone.log {
+	daily
+	size 8M
+	create 644
+	rotate 2
+	nomail
+	compress
+	notifempty
+	missingok
+	postrotate
+		systemctl restart geophone
+	endscript
+}

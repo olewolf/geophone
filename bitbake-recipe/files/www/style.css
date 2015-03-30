@@ -1,0 +1,17 @@
+#geodata #heatmap img {
+  width: 500;
+  height: 250;
+}
+ul {
+  clear: both;
+  width: 500px;
+  text-align;
+/*  left; border: 1px red solid; */
+  margin: 10px auto;
+}
+li {
+  border: 0px;
+  display: inline;
+  list-style-type: none;
+  margin: 0px 10px 0px 0px;
+}

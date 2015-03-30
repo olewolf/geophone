@@ -1,0 +1,17 @@
+This directory contains files used to build the geophone analyzer on an
+embedded system running Linux via the Open Embedded framework (see
+<http://www.openembedded.org> for details on the framework).
+
+The recipe sets up a sensor system that works as follows:
+
+A daemon invoked via systemd continuously reads the Geophone output via
+the USB serial port and writes a timestamped log to
+/var/lib/geophone/geophone.log.  The log is rotated by logrotate.
+
+Every 15 minutes a cron script creates a heatmap image based on the
+geophone log data.  The heatmap image is placed in the web server directory
+in /www/pages/geophone, and the previous heatmap image is renamed to
+include a timestamp.  Heatmaps older than seven days are deleted.
+
+The embedded Linux system runs a web server on its assigned IP address and
+provides a simple heatmap viewer at http://<ip-address>/view-geophone-image.pl.

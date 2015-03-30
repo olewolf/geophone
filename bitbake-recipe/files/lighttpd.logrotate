@@ -1,0 +1,8 @@
+/var/log/access.log /var/log/lighttpd.error.log} {
+	daily
+	create 644
+	rotate 1
+	nomail
+	notifempty
+	missingok
+}

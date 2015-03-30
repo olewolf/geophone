@@ -1,0 +1,2 @@
+# Rotate the heatmap images every 15 minutes
+*/15 * * * *	root	PATH="/usr/bin:$PATH" /usr/bin/geophone-rotate-heatmap

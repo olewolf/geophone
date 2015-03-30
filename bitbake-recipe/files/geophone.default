@@ -1,0 +1,7 @@
+# Serial port where the geophone data logger is attached.  If the device number
+# is not specified (e.g. the device is specified as /dev/ttyUSB), use the
+# first device found in this device class.
+DEVICE=/dev/ttyACM
+
+# Log file for the geophone data output.
+LOG_FILE=/var/lib/geophone/geophone.log

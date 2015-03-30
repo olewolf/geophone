@@ -1,0 +1,79 @@
+#!/bin/sh
+
+REQUIRED="geophone-filter-log geophone-createheatmap";
+GEODATADIR=/var/lib/geophone
+TIMESTAMP_FILE=timestamp
+GEOPHONE_IMAGES=/www/pages/geophone
+
+# Number of days after which old heatmap images are deleted.
+CLEANUP_AGE=7
+
+#for f in ${REQUIRED}; do
+#	if ! which $f >/dev/null; then
+#		echo >&2 "Required executable $f not found"
+#		exit 1
+#	fi
+#done
+
+if [[ ! -d "${GEODATADIR}" ]]; then
+	echo >&2 "Geodata log directory missing"
+	exit 1
+fi
+
+# Get the timestamp for right now.
+TIMESTAMP_NOW="$(date "+%s")"
+
+# Get the timestamp for the last image.
+if [[ -e ${GEODATADIR}/${TIMESTAMP_FILE} ]]; then
+	LAST_TIMESTAMP=$(cat ${GEODATADIR}/${TIMESTAMP_FILE})
+	LAST_TIMESTAMP=$((LAST_TIMESTAMP + 1 ))
+else
+	LAST_TIMESTAMP=0
+fi
+# To avoid system overload we'll ignore data older than two hours ago.
+TWO_HOURS_AGO=$(( ${TIMESTAMP_NOW} - 120 ))
+if [ ${LAST_TIMESTAMP} -lt ${TWO_HOURS_AGO} ]; then
+	LAST_TIMESTAMP=${TWO_HOURS_AGO}
+fi
+# Store new timestamp.
+echo "${TIMESTAMP_NOW}" > ${GEODATADIR}/${TIMESTAMP_FILE}
+
+cd ${GEODATADIR}
+
+# Create a new heatmap since the last timestamp.
+DATE_FORMAT="%a %b %d %T %Y"
+LAST_TIMESTAMP_TEXT="$(date -d @${LAST_TIMESTAMP} "+${DATE_FORMAT}")"
+TIMESTAMP_NOW_TEXT="$(date -d @${TIMESTAMP_NOW} "+${DATE_FORMAT}")"
+
+# Combine the most recent rotation and the current log.
+COMBINED_LOG="$(mktemp)"
+LOGFILE="${GEODATADIR}/geophone.log"
+if [[ -e ${LOGFILE}.1 ]]; then
+	cat ${LOGFILE}.1 ${LOGFILE} > ${COMBINED_LOG}
+elif [[ -e ${LOGFILE}.1.gz ]]; then
+	zcat ${LOGFILE}.1.gz > ${COMBINED_LOG}
+	cat ${LOGFILE} >> ${COMBINED_LOG}
+else
+	cat ${LOGFILE} > ${COMBINED_LOG}
+fi
+
+# Filter the desired date range from the combined log.
+WORK_LOG="$(mktemp)"
+cat ${COMBINED_LOG} | geophone-filter-log ${LAST_TIMESTAMP_TEXT} ${TIMESTAMP_NOW_TEXT} > ${WORK_LOG}
+rm -f ${COMBINED_LOG}
+
+# Create a new heatmap and rotate the older ones.
+CURRENT_HEATMAP=$(mktemp)
+mv ${CURRENT_HEATMAP} ${TMPDIR}/${CURRENT_HEATMAP}.jpg
+geophone-create-heatmap ${WORK_LOG} ${TMPDIR}/${CURRENT_HEATMAP}.jpg
+if [[ -s ${TMPDIR}/${CURRENT_HEATMAP}.jpg ]]; then
+	if [[ -e ${GEOPHONE_IMAGES}/geophone.jpg ]]; then
+		mv ${GEOPHONE_IMAGES}/geophone.jpg ${GEOPHONE_IMAGES}/geophone-${LAST_TIMESTAMP}.jpg
+	fi
+	chmod 644 ${TMPDIR}/${CURRENT_HEATMAP}.jpg
+	mv ${TMPDIR}/${CURRENT_HEATMAP}.jpg ${GEOPHONE_IMAGES}/geophone.jpg
+fi
+rm -f ${WORK_LOG}
+
+# Delete old images.
+find ${GEODATADIR} -mtime +${CLEANUP_AGE} -exec rm -f {} \;
