@@ -10,7 +10,6 @@
 
 use strict;
 use Time::Piece;
-#use Date::Parse;
 #use Data::Dumper qw(Dumper);
 
 
@@ -36,8 +35,8 @@ if( $fromdate eq "" )
 
 # Convert timestamps to UNIX time.
 my $time_piece = Time::Piece->strptime( $fromdate, "%c" );
-$time_piece = Time::Piece->strptime( $todate, "%c" );
 my $from_timestamp = $time_piece->epoch;
+$time_piece = Time::Piece->strptime( $todate, "%c" );
 my $to_timestamp   = $time_piece->epoch;
 
 foreach my $log_entry( <STDIN> )
