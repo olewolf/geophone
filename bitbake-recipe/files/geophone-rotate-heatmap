@@ -30,10 +30,10 @@ if [[ -e ${GEODATADIR}/${TIMESTAMP_FILE} ]]; then
 else
 	LAST_TIMESTAMP=0
 fi
-# To avoid system overload we'll ignore data older than two hours ago.
-TWO_HOURS_AGO=$(( ${TIMESTAMP_NOW} - 120 ))
-if [ ${LAST_TIMESTAMP} -lt ${TWO_HOURS_AGO} ]; then
-	LAST_TIMESTAMP=${TWO_HOURS_AGO}
+# To avoid system overload we'll ignore data older than one hour ago.
+ONE_HOUR_AGO=$(( ${TIMESTAMP_NOW} - 3600 ))
+if [ ${LAST_TIMESTAMP} -lt ${ONE_HOUR_AGO} ]; then
+	LAST_TIMESTAMP=${ONE_HOUR_AGO}
 fi
 # Store new timestamp.
 echo "${TIMESTAMP_NOW}" > ${GEODATADIR}/${TIMESTAMP_FILE}
