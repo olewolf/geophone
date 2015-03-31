@@ -7,7 +7,7 @@ SUMMARY = "Geophone data logger and visualizer"
 DESCRIPTION = "${SUMMARY}"
 PROVIDES = "geophone-logger"
 
-PR = "6"
+PR = "7"
 
 SRC_URI = " \
 	git://github.com/olewolf/geophone.git;protocol=https \
@@ -40,18 +40,12 @@ RDEPENDS_${PN} += " \
 	lighttpd \
 	lighttpd-module-cgi \
 	liberation-fonts \
-	perlmagick \
+	imagemagick-perlmagick \
 "
-# perl-module-exporter-heavy perl-module-exporter   perl-module-integer \
-#   perl-module-time-local \
-#  perl-module-constant perl-module-time-seconds perl-module-constant
-# perl-module-mro perl-module-scalar-util
-# perl-module-xsloader perl-module-list-util perlmodule-scalar-util-pp
-# perl-module-list-util perl-module-b
-#
-# -? perl-module-time-gmtime -> perl-module-time-tm perl-module-class-struct
 
-RRECOMMENDS_${PN} += " ntp "
+RRECOMMENDS_${PN} += " \
+	ntp \
+"
 
 inherit systemd
 
@@ -63,6 +57,7 @@ FILES_${PN} = " \
 	/usr/share/geophone/colormaps.png \
 	/var/lib/geophone \
 	/etc/logrotate.d/geophone \
+	/etc/logrotate.d/lighttpd \
 	/etc/cron.d/geophone-rotate-heatmap \
 	${WEB_ROOT}/ \
 	/etc/lighttpd.d/geophone-cgi.conf \
@@ -121,5 +116,5 @@ do_install () {
 	install -m 0644 ${WORKDIR}/www/style.css ${D}/${WEB_ROOT}/
 	install -m 0755 ${WORKDIR}/www/view-geophone-image.pl ${D}/${WEB_ROOT}/
 	install -m 0755 -d -D ${D}/${WEB_ROOT}/geophone
-	install -m 0644 ${WORKDIR}lighttpd.logrotate ${D}/etc/logrotate.d/lighttpd
+	install -m 0644 ${WORKDIR}/lighttpd.logrotate ${D}/etc/logrotate.d/lighttpd
 }

@@ -2,9 +2,9 @@
 	daily
 	size 8M
 	create 644
-	rotate 2
+	rotate 3
 	nomail
-	compress
+	nocompress
 	notifempty
 	missingok
 	postrotate

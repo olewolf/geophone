@@ -30,10 +30,10 @@ if [[ -e ${GEODATADIR}/${TIMESTAMP_FILE} ]]; then
 else
 	LAST_TIMESTAMP=0
 fi
-# To avoid system overload we'll ignore data older than one hour ago.
-ONE_HOUR_AGO=$(( ${TIMESTAMP_NOW} - 3600 ))
-if [ ${LAST_TIMESTAMP} -lt ${ONE_HOUR_AGO} ]; then
-	LAST_TIMESTAMP=${ONE_HOUR_AGO}
+# To avoid system overload we'll ignore data older than two hours ago.
+TWO_HOURS_AGO=$(( ${TIMESTAMP_NOW} - 1800 ))
+if [ ${LAST_TIMESTAMP} -lt ${TWO_HOURS_AGO} ]; then
+	LAST_TIMESTAMP=${TWO_HOURS_AGO}
 fi
 # Store new timestamp.
 echo "${TIMESTAMP_NOW}" > ${GEODATADIR}/${TIMESTAMP_FILE}
@@ -46,32 +46,28 @@ LAST_TIMESTAMP_TEXT="$(date -d @${LAST_TIMESTAMP} "+${DATE_FORMAT}")"
 TIMESTAMP_NOW_TEXT="$(date -d @${TIMESTAMP_NOW} "+${DATE_FORMAT}")"
 
 # Combine the most recent rotation and the current log.
-COMBINED_LOG="$(mktemp)"
 LOGFILE="${GEODATADIR}/geophone.log"
 if [[ -e ${LOGFILE}.1 ]]; then
-	cat ${LOGFILE}.1 ${LOGFILE} > ${COMBINED_LOG}
+	LOGFILE="${LOGFILE}.1 ${LOGFILE}"
 elif [[ -e ${LOGFILE}.1.gz ]]; then
-	zcat ${LOGFILE}.1.gz > ${COMBINED_LOG}
-	cat ${LOGFILE} >> ${COMBINED_LOG}
-else
-	cat ${LOGFILE} > ${COMBINED_LOG}
+	LOGFILE="${LOGFILE}.1.gz ${LOGFILE}"
 fi
 
 # Filter the desired date range from the combined log.
 WORK_LOG="$(mktemp)"
-cat ${COMBINED_LOG} | geophone-filter-log ${LAST_TIMESTAMP_TEXT} ${TIMESTAMP_NOW_TEXT} > ${WORK_LOG}
-rm -f ${COMBINED_LOG}
+zcat ${LOGFILE} | geophone-filter-log ${LAST_TIMESTAMP_TEXT} ${TIMESTAMP_NOW_TEXT} > ${WORK_LOG}
 
 # Create a new heatmap and rotate the older ones.
-CURRENT_HEATMAP=$(mktemp)
-mv ${CURRENT_HEATMAP} ${TMPDIR}/${CURRENT_HEATMAP}.jpg
-geophone-create-heatmap ${WORK_LOG} ${TMPDIR}/${CURRENT_HEATMAP}.jpg
-if [[ -s ${TMPDIR}/${CURRENT_HEATMAP}.jpg ]]; then
+CURRENT_HEATMAP=$( mktemp --suffix=.jpg )
+geophone-create-heatmap ${WORK_LOG} ${CURRENT_HEATMAP}
+if [[ -s ${CURRENT_HEATMAP} ]]; then
 	if [[ -e ${GEOPHONE_IMAGES}/geophone.jpg ]]; then
 		mv ${GEOPHONE_IMAGES}/geophone.jpg ${GEOPHONE_IMAGES}/geophone-${LAST_TIMESTAMP}.jpg
 	fi
-	chmod 644 ${TMPDIR}/${CURRENT_HEATMAP}.jpg
-	mv ${TMPDIR}/${CURRENT_HEATMAP}.jpg ${GEOPHONE_IMAGES}/geophone.jpg
+	chmod 644 ${CURRENT_HEATMAP}
+	mv ${CURRENT_HEATMAP} ${GEOPHONE_IMAGES}/geophone.jpg
+else
+	rm -f ${CURRENT_HEATMAP}
 fi
 rm -f ${WORK_LOG}
 

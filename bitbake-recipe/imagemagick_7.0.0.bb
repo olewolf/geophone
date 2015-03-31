@@ -4,19 +4,16 @@
 # reconfigured with Perl support before PerlMagick is built.
 
 MAINTAINER = "Ole Wolf <ole@naturloven.dk>"
-SUMMARY = " ImageMagick with PerlMagick"
+SUMMARY = " ImageMagick"
 DESCRIPTION = "${SUMMARY}"
-PROVIDES = "perlmagick imagemagick"
+RPROVIDES_${PN} = "imagemagick imagemagick-perlmagick"
 LICENSE = "ImageMagick"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=0887b670be7ef0c3cb37092b64d57514"
 
-DEPENDS += " perl-native "
-RDEPENDS_${PN} += " \
-	perl \
-	perl-module-carp \
-	perl-module-parent \
-	perl-module-dynaloader \
-	perl-module-autoloader \
+PR = "1"
+
+DEPENDS += " \
+	perl-native \
 "
 
 SRC_URI = "svn://subversion.imagemagick.org/subversion/ImageMagick;module=trunk;protocol=https"
@@ -25,21 +22,10 @@ S = "${WORKDIR}/trunk"
 
 inherit autotools binconfig pkgconfig perlnative
 
-# Define ImageMagick files.
-PACKAGECONFIG ??= ""
-PACKAGECONFIG[jp2] = "--with-jp2,--without-jp2,jasper"
-
-#${libdir}/ImageMagick-${PV}/modules-Q16/*/*.so \
-#                ${libdir}/ImageMagick-${PV}/modules-Q16/*/*.la \
-#                ${libdir}/ImageMagick-${PV}/modules-Q16/filters \
-#                ${libdir}/ImageMagick-${PV}/modules-Q16/coders \
-#                ${libdir}/ImageMagick-${PV}/config-Q16
-
 FILES_${PN}-dbg =+ " \
-	usr/lib/perl/5.14.3/auto/Image/Magick/.debug \
-	usr/lib/perl/5.14.3/auto/Image/Magick/Q16HDRI/.debug/Q16HDRI.so \
+	/usr/lib/perl/*/auto/Image/Magick/.debug \
+	/usr/lib/perl/*/auto/Image/Magick/Q16HDRI/.debug/Q16HDRI.so \
 	"
-
 FILES_${PN} += " \
 	/usr/lib/perl \
 	/usr/share \
@@ -47,11 +33,27 @@ FILES_${PN} += " \
 	/usr/lib/ImageMagick-${PV} \
 "
 
-BBCLASSEXTEND = "native"
+PACKAGES =+ "${PN}-perlmagick"
 
-LEAD_SONAME = "libMagickCore.so.*"
+FILES_${PN}-perlmagick += " \
+	/usr/lib/perl/*/Image/Magick.pm \
+	/usr/lib/perl/*/Image/Magick/Q16HDRI.pm \
+	/usr/lib/perl/*/auto/Image/Magick.pm \
+	/usr/lib/perl/*/auto/Image/Magick/Q16HDRI/Q16HDRI.so \
+	/usr/lib/perl/*/auto/Image/Magick/Q16HDRI/autosplit.ix \
+	/man/man3/Image::Magick.3pm \
+	/man/man3/Image::Magick::Q16HDRI.3pm \
+	"
+RDEPENDS_${PN}-perlmagick = " \
+	${PN} \
+	perl \
+	perl-module-carp \
+	perl-module-parent \
+	perl-module-dynaloader \
+	perl-module-autoloader \
+"
 
-OECONF_OPTIONS = "--without-x --disable-openmp --without-xml --disable-opencl --with-quantum-depth=16 --with-sysroot=${PKG_CONFIG_SYSROOT_DIR} --prefix=${PKG_CONFIG_SYSROOT_DIR}${prefix}"
+OECONF_OPTIONS = "--without-x --without-xml --disable-openmp --disable-opencl --with-quantum-depth=16 --with-sysroot=${PKG_CONFIG_SYSROOT_DIR} --prefix=${PKG_CONFIG_SYSROOT_DIR}${prefix}"
 
 EXTRA_OECONF = "${OECONF_OPTIONS}"
 
@@ -75,7 +77,6 @@ do_install_append() {
 	PERL_VERSION="$( perl -v 2>/dev/null | sed -n 's/This is perl.*v[a-z ]*\([0-9]\.[0-9][0-9.]*\).*$/\1/p' )"
 
 	PERLMAGICK_INSTALL_DIR="${WORKDIR}/image"
-#	PERLMAGICK_INSTALL_DIR="${STAGING_LIBDIR}/perl5/${PERL_VERSION}"
 
 	oe_runconf --with-perl
 	oe_runmake perl-sources
