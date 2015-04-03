@@ -1,0 +1,23 @@
+#!/bin/sh
+#
+# Usage:  led-indicator <led-name> <state>
+#
+# Examples:
+#
+#   led-indicator aria_led heartbeat
+#   led-indicator status on
+
+LED_NAME="$1"
+STATE="$2"
+
+if [ -d /sys/class/leds/${LED_NAME} ]; then
+	if [[ "${STATE}" == "on" ]]; then
+		echo "oneshot" > /sys/class/leds/${LED_NAME}/trigger
+		echo "1" > /sys/class/leds/${LED_NAME}/brightness
+	elif [[ "${STATE}" == "off" ]]; then
+		echo "oneshot" > /sys/class/leds/${LED_NAME}/trigger
+		echo "0" > /sys/class/leds/${LED_NAME}/brightness
+	else
+		echo "${STATE}" > /sys/class/leds/${LED_NAME}/trigger
+	fi
+fi

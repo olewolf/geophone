@@ -8,6 +8,9 @@ GEOPHONE_IMAGES=/www/pages/geophone
 # Number of days after which old heatmap images are deleted.
 CLEANUP_AGE=7
 
+# Indicate that we're now processing an image.
+led-indicator status on
+
 #for f in ${REQUIRED}; do
 #	if ! which $f >/dev/null; then
 #		echo >&2 "Required executable $f not found"
@@ -73,3 +76,6 @@ rm -f ${WORK_LOG}
 
 # Delete old images.
 find ${GEODATADIR} -mtime +${CLEANUP_AGE} -exec rm -f {} \;
+
+# Indicate that the image generation is complete.
+led-indicator status off

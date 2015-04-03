@@ -8,6 +8,8 @@ Wants=lighttpd
 Type=simple
 WorkingDirectory=/var/lib/geophone
 ExecStart=/usr/bin/geophone-service.sh
+Restart=always
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target

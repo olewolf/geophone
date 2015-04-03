@@ -7,11 +7,12 @@ SUMMARY = "Geophone data logger and visualizer"
 DESCRIPTION = "${SUMMARY}"
 PROVIDES = "geophone-logger"
 
-PR = "7"
+PR = "8"
 
 SRC_URI = " \
 	git://github.com/olewolf/geophone.git;protocol=https \
 	file://geophone-rotate-heatmap \
+	file://led-indicator \
 	file://geophone-rotate-heatmap.cron \
 	file://geophone.logrotate \
 	file://geophone.service file://geophone-service.sh file://geophone.default \
@@ -88,6 +89,7 @@ do_install () {
 	install -m 0755 ${S}/filter-log.pl ${D}/usr/bin/geophone-filter-log
 	install -m 0755 ${S}/geophone-log-serial ${D}/usr/bin/
 	install -m 0755 ${WORKDIR}/geophone-rotate-heatmap ${D}/usr/bin/
+	install -m 0755 ${WORKDIR}/led-indicator ${D}/usr/bin/
 
 	install -m 0755 -d -D ${D}/var/lib/geophone
 
