@@ -388,4 +388,4 @@ $coordinate_system->Annotate( font => "$font", text => "Frequency",
 							  rotate => "-90" );
 
 # Write the heapmap image to disk.
-$coordinate_system->Write( filename => $image_file, compression => "JPEG" );
+$coordinate_system->Write( filename => $image_file );
