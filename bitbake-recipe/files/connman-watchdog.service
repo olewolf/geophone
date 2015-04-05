@@ -1,0 +1,12 @@
+[Unit]
+Description=Connman watchdog
+Wants=connman
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/connman-watchdog.sh
+Restart=always
+RestartSec=20
+
+[Install]
+WantedBy=multi-user.target

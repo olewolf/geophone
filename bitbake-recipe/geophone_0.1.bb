@@ -16,6 +16,7 @@ SRC_URI = " \
 	file://geophone-rotate-heatmap.cron \
 	file://geophone.logrotate \
 	file://geophone.service file://geophone-service.sh file://geophone.default \
+	file://connman-watchdog.service file://connman-watchdog.sh \
 	file://www/nav-first.png \
 	file://www/nav-previous.png \
 	file://www/nav-next.png \
@@ -51,7 +52,7 @@ RRECOMMENDS_${PN} += " \
 inherit systemd
 
 SYSTEMD_PACKAGES = "${PN}-systemd"
-SYSTEMD_SERVICE_${PN}-systemd = "geophone.service"
+SYSTEMD_SERVICE_${PN}-systemd = "geophone.service connman-watchdog.service"
 
 FILES_${PN} = " \
 	/usr/bin/ \
@@ -90,6 +91,7 @@ do_install () {
 	install -m 0755 ${S}/geophone-log-serial ${D}/usr/bin/
 	install -m 0755 ${WORKDIR}/geophone-rotate-heatmap ${D}/usr/bin/
 	install -m 0755 ${WORKDIR}/led-indicator ${D}/usr/bin/
+	install -m 0755 ${WORKDIR}/connman-watchdog.sh ${D}/usr/bin/
 
 	install -m 0755 -d -D ${D}/var/lib/geophone
 
@@ -107,6 +109,7 @@ do_install () {
 	install -m 0755 ${WORKDIR}/geophone-service.sh ${D}/usr/bin/geophone-service.sh
 	install -m 0755 -d -D ${D}/${systemd_unitdir}/system
 	install -m 0644 ${WORKDIR}/geophone.service ${D}/${systemd_unitdir}/system/
+	install -m 0644 ${WORKDIR}/connman-watchdog.service ${D}/${systemd_unitdir}/system/
 
 	install -m 0755 -d -D ${WORKDIR}/geophone-cfi.conf ${D}/etc/lighttpd.d
 	install -m 0644 ${WORKDIR}/geophone-cgi.conf ${D}/etc/lighttpd.d/geophone-cgi.conf
