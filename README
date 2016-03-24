@@ -38,3 +38,6 @@ read-serial-log.c provides sample C code that reads the serial output from
 Geophone.ino and adds a timestamp.  The output may be plotted using the
 createheatmap.pl perl script, which generates a JPEG file with the graphical
 output.
+
+Inquiries via the Github issue tracker, please.  This way, others may benefit
+from the answers.
